@@ -1,0 +1,47 @@
+name: update
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # 07:00 Europe/Rome in estate, 06:00 in inverno
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      # src/constants.ts (host del servizio) non è nel repo: il secret ne contiene il testo intero
+      - run: printf '%s\n' "$CONSTANTS_TS" > src/constants.ts
+        env:
+          CONSTANTS_TS: ${{ secrets.CONSTANTS_TS }}
+      - run: bun install --frozen-lockfile
+      - run: bun run watchlist
+      - run: bun run watchlist-votes
+      - run: bun run catalog
+      - run: bun run table
+      - run: mkdir -p site && cp data/table.html site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

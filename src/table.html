@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>サク巻き · __SUBTITLE__</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  :root { --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; } /* rampa ordinale blu, validata (dataviz) */
+  @media (prefers-color-scheme: dark) { :root { --s1: #9ec5f4; --s2: #6da7ec; --s3: #3987e5; --s4: #256abf; --s5: #184f95; } }
+  body { margin: 24px; }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  h1 .sub { font-size: .8rem; font-weight: normal; opacity: .7; margin-left: 8px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-bottom: 12px; font-size: .9rem; }
+  .filters input[type=text] { width: 16rem; }
+  .filters input[type=number] { width: 5rem; }
+  table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
+  th, td { padding: 6px 10px; border-bottom: 1px solid #8884; text-align: left; vertical-align: middle; white-space: nowrap; }
+  tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
+  td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
+  td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
+  th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; background: Canvas; }
+  th.sorted::after { content: "\00a0▲"; opacity: .7; }
+  th.sorted.desc::after { content: "\00a0▼"; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .genres { opacity: .8; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; }
+  .bar span { border-radius: 1px; min-width: 0; }
+  .legend { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
+  .legend i { width: 10px; height: 10px; border-radius: 1px; display: inline-block; }
+  #count { opacity: .7; margin-left: auto; }
+</style>
+</head>
+<body>
+<h1><span title="sakumaki">サク巻き</span> <span class="sub">__SUBTITLE__</span></h1>
+<div class="filters">
+  <input id="q" type="text" placeholder="Cerca nel titolo…">
+  <label>Genere <select id="genre"><option value="">tutti</option></select></label>
+  <label>Voto ≥ <input id="minRating" type="number" step="0.01" min="0" max="5" value="0"></label>
+  <label>Voto pesato ≥ <input id="minWeighted" type="number" step="0.01" min="0" max="5" value="0"></label>
+  <label>Votanti ≥ <input id="minVotes" type="number" step="1000" min="0" value="0"></label>
+  <label title="voti di fiducia della media bayesiana: pesato = (v·voto fine + m·media catalogo)/(v+m)">m <input id="m" type="number" step="1000" min="0" value="__M__"></label>
+  <label><input id="onlyWatchlist" type="checkbox"> solo in watchlist</label>
+  <label><input id="hideWatchlist" type="checkbox"> non in watchlist</label>
+  <span id="count"></span>
+</div>
+<table>
+  <thead><tr>
+    <th data-k="title">Titolo</th>
+    <th data-k="weighted" data-num title="(v·voto fine + m·media catalogo)/(v+m), m regolabile nei filtri">Voto pesato</th>
+    <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
+    <th data-k="votes" data-num>Votanti</th>
+    <th data-k="five" data-num title="1★→5★ chiaro→scuro; larghezze ∝ √quota per rendere leggibile la coda; ordina per quota di 5★">Distribuzione <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
+    <th data-k="year" data-num>Anno</th>
+    <th data-k="seasons" data-num>Stagioni</th>
+    <th data-k="episodes" data-num>Episodi</th>
+    <th data-k="in_watchlist">Watchlist</th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<script id="data" type="application/json">__ROWS__</script>
+<script>
+  const rows = JSON.parse(document.getElementById("data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const state = { key: "weighted", desc: true };
+
+  const genres = [...new Set(rows.flatMap((r) => r.genres))].sort();
+  for (const g of genres) $("genre").append(new Option(g, g));
+
+  const fmt = new Intl.NumberFormat("it-IT");
+  const yes = (b) => (b ? "✓" : "");
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  function render() {
+    const q = $("q").value.trim().toLowerCase();
+    const genre = $("genre").value;
+    const minRating = Number($("minRating").value) || 0, minWeighted = Number($("minWeighted").value) || 0;
+    const minVotes = Number($("minVotes").value) || 0;
+    const only = $("onlyWatchlist").checked, hide = $("hideWatchlist").checked;
+    const m = Number($("m").value) || 0, C = __C__; // media del catalogo intero, calcolata da table.ts
+    for (const r of rows) r.weighted = (r.votes * r.rating + m * C) / (r.votes + m);
+    const visible = rows.filter((r) =>
+      (!q || r.title.toLowerCase().includes(q)) &&
+      (!genre || r.genres.includes(genre)) &&
+      r.rating >= minRating && r.weighted >= minWeighted && r.votes >= minVotes &&
+      (!only || r.in_watchlist) && (!hide || !r.in_watchlist));
+    const { key, desc } = state;
+    visible.sort((a, b) => {
+      const x = a[key] ?? "", y = b[key] ?? "";
+      const c = typeof x === "number" || typeof x === "boolean" ? x - y : String(x).localeCompare(String(y));
+      return desc ? -c : c;
+    });
+    $("rows").innerHTML = visible.map((r) => `<tr>
+      <td class="title"><a href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a><div class="genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></td>
+      <td class="num">${r.weighted.toFixed(3)}</td>
+      <td class="num">${r.rating.toFixed(3)}</td>
+      <td class="num">${fmt.format(r.votes)}</td>
+      <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => `<span style="flex:${Math.sqrt(s.pct)} 0 0;background:var(--s${i + 1})"></span>`).join("")}</div></td>
+      <td class="num">${r.year ?? ""}</td>
+      <td class="num">${r.seasons}</td>
+      <td class="num">${r.episodes}</td>
+      <td>${yes(r.in_watchlist)}</td>
+    </tr>`).join("");
+    $("count").textContent = `${visible.length} / ${rows.length} serie`;
+    for (const th of document.querySelectorAll("th")) {
+      th.classList.toggle("sorted", th.dataset.k === key);
+      th.classList.toggle("desc", th.dataset.k === key && desc);
+    }
+  }
+
+  for (const th of document.querySelectorAll("th")) th.onclick = () => {
+    const k = th.dataset.k;
+    state.desc = state.key === k ? !state.desc : "num" in th.dataset;
+    state.key = k;
+    render();
+  };
+  for (const id of ["q", "genre", "minRating", "minWeighted", "minVotes", "m", "onlyWatchlist", "hideWatchlist"]) $(id).oninput = render;
+  render();
+</script>
+</body>
+</html>

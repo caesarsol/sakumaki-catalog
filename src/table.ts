@@ -1,0 +1,81 @@
+import type { SeriesObject, WatchlistItem } from "./api";
+import { SITE_BASE } from "./constants";
+
+/**
+ * Da data/catalog.ndjson (opzionalmente filtrato per voto medio >= MIN_RATING) produce:
+ * - data/catalog-scored.ndjson: oggetto serie intatto + `rating_fine`, `rating_weighted`, `in_watchlist`
+ * - data/table.html: tabella autonoma, ordinabile e filtrabile (template in src/table.html)
+ */
+const MIN_RATING = Number(Bun.env.MIN_RATING ?? 0); // sull'average a un decimale dell'API
+const WEIGHT_VOTES = Number(Bun.env.WEIGHT_VOTES ?? 10_000); // `m` della media bayesiana (formula IMDb)
+const dataDir = `${import.meta.dir}/../data`;
+
+const readNdjson = async <T>(path: string): Promise<T[]> =>
+  (await Bun.file(path).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+
+const catalog = await readNdjson<SeriesObject>(`${dataDir}/catalog.ndjson`);
+const watchlistFile = Bun.file(`${dataDir}/watchlist.json`);
+const inWatchlist = new Set<string>();
+if (await watchlistFile.exists()) {
+  const { data }: { data: WatchlistItem[] } = await watchlistFile.json();
+  for (const w of data) if (w.panel.episode_metadata) inWatchlist.add(w.panel.episode_metadata.series_id);
+}
+
+/** Media a 3 decimali dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
+function fineRating(s: SeriesObject): number {
+  let sum = 0;
+  let n = 0;
+  for (const stars of [1, 2, 3, 4, 5] as const) {
+    const b = s.rating[`${stars}s`];
+    const count = parseFloat(b.displayed) * (b.unit === "K" ? 1e3 : b.unit === "M" ? 1e6 : 1);
+    sum += stars * count;
+    n += count;
+  }
+  return n ? sum / n : Number(s.rating.average);
+}
+const round3 = (x: number) => Math.round(x * 1000) / 1000;
+
+const rated = catalog.filter((s) => s.rating?.total > 0);
+const catalogMean = rated.reduce((acc, s) => acc + fineRating(s), 0) / rated.length;
+const weighted = (s: SeriesObject) => {
+  const v = s.rating.total;
+  return (v * fineRating(s) + WEIGHT_VOTES * catalogMean) / (v + WEIGHT_VOTES);
+};
+
+const top = catalog
+  .filter((s) => Number(s.rating?.average) >= MIN_RATING)
+  .map((s) => ({
+    ...s,
+    rating_fine: round3(fineRating(s)),
+    rating_weighted: round3(weighted(s)),
+    in_watchlist: inWatchlist.has(s.id),
+  }))
+  .sort((a, b) => b.rating_weighted - a.rating_weighted);
+
+await Bun.write(`${dataDir}/catalog-scored.ndjson`, top.map((s) => JSON.stringify(s)).join("\n") + "\n");
+
+const rows = top.map((s) => ({
+  id: s.id,
+  title: s.title,
+  url: `${SITE_BASE}/series/${s.id}/${s.slug_title}`,
+  rating: s.rating_fine,
+  votes: s.rating.total,
+  five: s.rating["5s"].percentage,
+  stars: ([1, 2, 3, 4, 5] as const).map((k) => ({ pct: s.rating[`${k}s`].percentage, shown: s.rating[`${k}s`].displayed + s.rating[`${k}s`].unit })),
+  year: s.series_metadata.series_launch_year,
+  seasons: s.series_metadata.season_count,
+  episodes: s.series_metadata.episode_count,
+  genres: s.series_metadata.tenant_categories ?? [],
+  maturity: s.series_metadata.maturity_ratings.join(", "),
+  simulcast: s.series_metadata.is_simulcast,
+  dubbed: s.series_metadata.is_dubbed,
+  in_watchlist: s.in_watchlist,
+}));
+const template = await Bun.file(`${import.meta.dir}/table.html`).text();
+const html = template
+  .replaceAll("__SUBTITLE__", MIN_RATING > 0 ? `serie con voto ≥ ${MIN_RATING}` : "catalogo serie")
+  .replace("__M__", String(WEIGHT_VOTES))
+  .replace("__C__", String(round3(catalogMean)))
+  .replace("__ROWS__", JSON.stringify(rows).replaceAll("</", "<\\/"));
+await Bun.write(`${dataDir}/table.html`, html);
+console.log(`${top.length} serie su ${catalog.length} (voto >= ${MIN_RATING}): data/catalog-scored.ndjson, data/table.html`);

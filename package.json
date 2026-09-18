@@ -1,0 +1,16 @@
+{
+  "name": "sakumaki-catalog",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "watchlist": "bun run src/watchlist.ts",
+    "catalog": "bun run src/catalog.ts",
+    "table": "bun run src/table.ts",
+    "watchlist-votes": "bun run src/watchlist-votes.ts",
+    "typecheck": "bun x tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
