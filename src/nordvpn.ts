@@ -1,3 +1,5 @@
+import { REQUEST_TIMEOUT_MS } from "./api";
+
 /**
  * Proxy HTTPS di NordVPN (porta 89) su un server scelto a caso fra i 20 consigliati per il paese,
  * così ogni run esce da un IP diverso. Le credenziali sono le "service credentials" del Nord Account
@@ -17,7 +19,7 @@ export async function randomProxy(nordId: number): Promise<{ host: string; url: 
     "filters[country_id]": String(nordId),
     limit: "20",
   }).toString();
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`nordvpn recommendations failed: ${res.status}`);
   const servers: Server[] = await res.json();
   const hosts = servers.flatMap((s) =>

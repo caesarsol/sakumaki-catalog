@@ -2,12 +2,12 @@ name: catalog
 
 on:
   schedule:
-    - cron: "0 3 * * 1" # lunedì, 05:00 Europe/Rome in estate, 04:00 in inverno
+    - cron: "0 2 * * 6" # notte fra venerdì e sabato, 04:00 Europe/Rome in estate, 03:00 in inverno
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: write # per lanciare update.yml a fine run
+  actions: write # per scaricare l'artifact precedente e lanciare watchlist.yml a fine run
 
 jobs:
   catalog:
@@ -20,14 +20,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data # elenchi della settimana scorsa: un paese che fallisce oggi tiene il suo
+        continue-on-error: true # al primo run non c'è nessun artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: bun run catalog # token anonimo, 5 minuti fra un paese e l'altro: circa un'ora
-        continue-on-error: true # un paese fallito non blocca gli altri: merge usa i cataloghi scaricati
+        continue-on-error: true # un paese fallito non blocca gli altri e tiene il catalog-<ISO2>.ndjson della settimana scorsa
       - run: bun run merge
       - uses: actions/upload-artifact@v4
         with:
           name: catalog
-          path: data/catalog.ndjson
+          path: data/catalog*.ndjson # merge più i file per paese, che la settimana prossima fanno da riserva
           retention-days: 90
-      - run: gh workflow run update.yml # ricostruisce la pagina con il catalogo nuovo
+      - run: gh workflow run watchlist.yml # ricostruisce la pagina con il catalogo nuovo
         env:
           GH_TOKEN: ${{ github.token }}

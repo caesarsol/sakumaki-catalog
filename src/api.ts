@@ -10,6 +10,8 @@ if (!BASE) throw new Error("API_BASE mancante in .env (vedi .env.example)");
 const WEB_CLIENT_BASIC = "bm9haWhkZXZtXzZpeWcwYThsMHE6"; // base64("noaihdevm_6iyg0a8l0q:")
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+/** Timeout per ogni richiesta: senza, una connessione appesa blocca il run finché GHA non lo uccide. */
+export const REQUEST_TIMEOUT_MS = 30_000;
 /** Pausa casuale di 2–5 s fra due chiamate, per non martellare l'API. */
 export const pause = () => Bun.sleep(2000 + Math.random() * 3000);
 
@@ -43,6 +45,7 @@ async function tokenRequest(grant_type: string, extraHeaders: Record<string, str
   const res = await fetch(`${BASE}/auth/v1/token`, {
     method: "POST",
     proxy,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       Authorization: `Basic ${WEB_CLIENT_BASIC}`,
       "Content-Type": "application/x-www-form-urlencoded",
@@ -75,6 +78,7 @@ export async function fetchWatchlist(token: Token, locale = "en-US"): Promise<Wa
       locale,
     }).toString();
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
     });
     if (!res.ok) throw new Error(`watchlist failed: ${res.status}`);
@@ -116,6 +120,7 @@ export async function fetchObjects(token: AnonToken, ids: string[], locale = "en
   const url = new URL(`${BASE}/content/v2/cms/objects/${ids.join(",")}`);
   url.search = new URLSearchParams({ ratings: "true", locale }).toString();
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
   });
   if (!res.ok) throw new Error(`objects failed: ${res.status}`);
@@ -139,6 +144,7 @@ export async function fetchCatalog(token: AnonToken, locale = "en-US", proxy?: s
     }).toString();
     const res = await fetch(url, {
       proxy,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
     });
     if (!res.ok) throw new Error(`browse failed: ${res.status}`);
