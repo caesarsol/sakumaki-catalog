@@ -42,9 +42,9 @@
   <input id="q" type="text" placeholder="Cerca nel titolo…">
   <label>Genere <select id="genre"><option value="">tutti</option></select></label>
   <label>Voto ≥ <input id="minRating" type="number" step="0.01" min="0" max="5" value="0"></label>
-  <label>Voto pesato ≥ <input id="minWeighted" type="number" step="0.01" min="0" max="5" value="0"></label>
+  <label>V Bayes ≥ <input id="minWeighted" type="number" step="0.01" min="0" max="5" value="0"></label>
   <label>Votanti ≥ <input id="minVotes" type="number" step="1000" min="0" value="0"></label>
-  <label title="voti di fiducia della media bayesiana: pesato = (v·voto fine + m·media catalogo)/(v+m)">m <input id="m" type="number" step="1000" min="0" value="__M__"></label>
+  <label title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></label>
   <label><input id="onlyWatchlist" type="checkbox"> solo in watchlist</label>
   <label><input id="hideWatchlist" type="checkbox"> non in watchlist</label>
   <span id="count"></span>
@@ -54,7 +54,8 @@
 <table>
   <thead><tr>
     <th data-k="title">Titolo</th>
-    <th data-k="weighted" data-num title="(v·voto fine + m·media catalogo)/(v+m), m regolabile nei filtri">Voto pesato</th>
+    <th data-k="weighted" data-num title="media bayesiana: (v·voto + m·media catalogo)/(v+m), m regolabile nei filtri">V Bayes</th>
+    <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
     <th data-k="votes" data-num>Votanti</th>
     <th data-k="five" data-num title="1★→5★ chiaro→scuro; larghezze ∝ √quota per rendere leggibile la coda; ordina per quota di 5★">Distribuzione <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
@@ -101,6 +102,7 @@
     $("rows").innerHTML = visible.map((r) => `<tr>
       <td class="title"><a href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a><div class="genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></td>
       <td class="num">${r.weighted.toFixed(3)}</td>
+      <td class="num">${r.lcb.toFixed(3)}</td>
       <td class="num">${r.rating.toFixed(3)}</td>
       <td class="num">${fmt.format(r.votes)}</td>
       <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => `<span style="flex:${Math.sqrt(s.pct)} 0 0;background:var(--s${i + 1})"></span>`).join("")}</div></td>

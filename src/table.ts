@@ -22,18 +22,29 @@ if (await watchlistFile.exists()) {
   for (const w of data) if (w.panel.episode_metadata) inWatchlist.add(w.panel.episode_metadata.series_id);
 }
 
-/** Media a 3 decimali dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
-function fineRating(s: SeriesObject): number {
+/** Media e deviazione standard dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
+function starStats(s: SeriesObject): { mean: number; sd: number } {
   let sum = 0;
+  let sumSq = 0;
   let n = 0;
   for (const stars of [1, 2, 3, 4, 5] as const) {
     const b = s.rating[`${stars}s`];
     const count = parseFloat(b.displayed) * (b.unit === "K" ? 1e3 : b.unit === "M" ? 1e6 : 1);
     sum += stars * count;
+    sumSq += stars * stars * count;
     n += count;
   }
-  return n ? sum / n : Number(s.rating.average);
+  if (!n) return { mean: Number(s.rating.average), sd: 0 };
+  const mean = sum / n;
+  return { mean, sd: Math.sqrt(Math.max(0, sumSq / n - mean * mean)) };
 }
+const fineRating = (s: SeriesObject) => starStats(s).mean;
+/** Limite inferiore dell'intervallo di confidenza al 95 % della media: scende con pochi voti, non sale mai. Tagliato a 1. */
+function lowerBound(s: SeriesObject): number {
+  const { mean, sd } = starStats(s);
+  return Math.max(1, mean - 1.96 * (sd / Math.sqrt(s.rating.total || 1)));
+}
+
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
 const rated = catalog.filter((s) => s.rating?.total > 0);
@@ -49,6 +60,7 @@ const top = catalog
     ...s,
     rating_fine: round3(fineRating(s)),
     rating_weighted: round3(weighted(s)),
+    rating_lcb: round3(lowerBound(s)),
     in_watchlist: inWatchlist.has(s.id),
   }))
   .sort((a, b) => b.rating_weighted - a.rating_weighted);
@@ -60,6 +72,7 @@ const rows = top.map((s) => ({
   title: s.title,
   url: `${SITE_BASE}/series/${s.id}/${s.slug_title}`,
   rating: s.rating_fine,
+  lcb: s.rating_lcb,
   votes: s.rating.total,
   five: s.rating["5s"].percentage,
   stars: ([1, 2, 3, 4, 5] as const).map((k) => ({ pct: s.rating[`${k}s`].percentage, shown: s.rating[`${k}s`].displayed + s.rating[`${k}s`].unit })),
