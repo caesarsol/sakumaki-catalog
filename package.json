@@ -8,10 +8,12 @@
     "merge": "bun run src/merge.ts",
     "table": "bun run src/table.ts",
     "watchlist-votes": "bun run src/watchlist-votes.ts",
-    "typecheck": "bun x tsc --noEmit"
+    "typecheck": "bun x tsc --noEmit",
+    "dev": "browser-sync start --server data --files data/index.html --port 8787 --no-open --no-ui --no-notify"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "browser-sync": "^3.0.4",
     "typescript": "^5"
   }
 }

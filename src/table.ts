@@ -6,7 +6,7 @@ if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)"
 /**
  * Da data/catalog.ndjson (opzionalmente filtrato per voto medio >= MIN_RATING) produce:
  * - data/catalog-scored.ndjson: oggetto serie intatto + `rating_fine`, `rating_weighted`, `in_watchlist`
- * - data/table.html: tabella autonoma, ordinabile e filtrabile (template in src/table.html)
+ * - data/index.html: tabella autonoma, ordinabile e filtrabile (template in src/table.html)
  */
 const MIN_RATING = Number(Bun.env.MIN_RATING ?? 0); // sull'average a un decimale dell'API
 const WEIGHT_VOTES = Number(Bun.env.WEIGHT_VOTES ?? 10_000); // `m` della media bayesiana (formula IMDb)
@@ -95,5 +95,5 @@ const html = template
   .replace("__COUNTRIES__", JSON.stringify(countries))
   .replace("__C__", String(round3(catalogMean)))
   .replace("__ROWS__", JSON.stringify(rows).replaceAll("</", "<\\/"));
-await Bun.write(`${dataDir}/table.html`, html);
-console.log(`${top.length} serie su ${catalog.length} (voto >= ${MIN_RATING}): data/catalog-scored.ndjson, data/table.html`);
+await Bun.write(`${dataDir}/index.html`, html);
+console.log(`${top.length} serie su ${catalog.length} (voto >= ${MIN_RATING}): data/catalog-scored.ndjson, data/index.html`);

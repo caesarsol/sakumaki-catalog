@@ -35,7 +35,7 @@ jobs:
         continue-on-error: true # un paese fallito non blocca la tabella: merge e table usano i cataloghi scaricati
       - run: bun run merge
       - run: bun run table
-      - run: mkdir -p site && cp data/table.html site/index.html
+      - run: mkdir -p site && cp data/index.html site/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
