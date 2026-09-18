@@ -26,7 +26,7 @@
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 #8884; } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted::after { content: "\00a0▲"; opacity: .7; }
   th.sorted.desc::after { content: "\00a0▼"; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
   .genres { opacity: .8; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; }
   .bar span { border-radius: 1px; min-width: 0; }
