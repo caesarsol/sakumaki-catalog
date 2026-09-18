@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # per scaricare l'artifact dell'ultimo run di catalog.yml
   pages: write
   id-token: write
 
@@ -23,17 +24,15 @@ jobs:
       AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
       API_BASE: ${{ secrets.API_BASE }} # gli host sono secret, non variabili: nei log pubblici vengono mascherati
       SITE_BASE: ${{ secrets.SITE_BASE }}
-      NORD_USER: ${{ secrets.NORD_USER }} # service credentials NordVPN (Nord Account > Manual setup), per il proxy per paese
-      NORD_PASS: ${{ secrets.NORD_PASS }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data # catalogo dell'ultimo run settimanale riuscito
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: bun run watchlist
       - run: bun run watchlist-votes
-      - run: bun run catalog
-        continue-on-error: true # un paese fallito non blocca la tabella: merge e table usano i cataloghi scaricati
-      - run: bun run merge
       - run: bun run table
       - run: mkdir -p site && cp data/index.html site/index.html
       - uses: actions/upload-pages-artifact@v3

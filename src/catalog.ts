@@ -1,4 +1,4 @@
-import { fetchCatalog, loginAnonymous, pause, type SeriesObject } from "./api";
+import { fetchCatalog, loginAnonymous, type SeriesObject } from "./api";
 import { COUNTRIES, type Country } from "./countries";
 import { randomProxy } from "./nordvpn";
 
@@ -8,8 +8,10 @@ import { randomProxy } from "./nordvpn";
  */
 const dataDir = `${import.meta.dir}/../data`;
 const ndjson = (rows: unknown[]) => rows.map((r) => JSON.stringify(r)).join("\n") + "\n";
+// Fra un paese e l'altro e fra due tentativi: dopo una raffica di autenticazioni il backend dei proxy Nord ha risposto 407 per ~25 minuti.
+const COUNTRY_PAUSE_MS = Number(Bun.env.COUNTRY_PAUSE_S || 300) * 1000;
 
-/** Fino a 3 server diversi: un proxy può essere giù, o l'API può vederci in un paese diverso da quello atteso. */
+/** Due server diversi, con la pausa lunga in mezzo: un proxy può rifiutare, o l'API può vederci in un paese diverso da quello atteso. */
 async function catalogFrom(country: Country): Promise<SeriesObject[]> {
   for (let attempt = 1; ; attempt++) {
     const proxy = await randomProxy(country.nordId);
@@ -19,8 +21,8 @@ async function catalogFrom(country: Country): Promise<SeriesObject[]> {
       return await fetchCatalog(token, "en-US", proxy.url);
     } catch (e) {
       console.warn(`${country.iso2} via ${proxy.host}, tentativo ${attempt}: ${(e as Error).message}`);
-      if (attempt === 3) throw e;
-      await pause();
+      if (attempt === 2) throw e;
+      await Bun.sleep(COUNTRY_PAUSE_MS);
     }
   }
 }
@@ -36,7 +38,7 @@ for (const country of targets) {
   } catch {
     failed.push(country.iso2);
   }
-  await pause();
+  await Bun.sleep(COUNTRY_PAUSE_MS);
 }
 if (failed.length) {
   console.error(`paesi falliti: ${failed.join(", ")}`);
