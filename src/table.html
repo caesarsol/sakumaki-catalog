@@ -2,15 +2,20 @@
 <html lang="it">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>サク巻き · __SUBTITLE__</title>
 <style>
   :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
   :root { --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; } /* rampa ordinale blu, validata (dataviz) */
   @media (prefers-color-scheme: dark) { :root { --s1: #9ec5f4; --s2: #6da7ec; --s3: #3987e5; --s4: #256abf; --s5: #184f95; } }
-  body { margin: 24px; }
-  h1 { font-size: 3.2rem; margin: 0 0 16px; }
+  /* Layout a colonna a tutta altezza: titolo e filtri fissi, solo .scroller scorre (in entrambe le direzioni); l'intestazione della tabella è sticky dentro di esso. */
+  html, body { height: 100%; }
+  body { margin: 0; display: flex; flex-direction: column; }
+  header { padding: 16px 24px 12px; }
+  .scroller { flex: 1; min-height: 0; overflow: auto; padding: 0 24px 24px; }
+  h1 { font-size: clamp(2rem, 8vw, 3.2rem); margin: 0 0 16px; }
   h1 .sub { font-size: 1.5rem; font-weight: normal; opacity: .7; margin-left: 12px; }
-  .filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-bottom: 12px; font-size: .9rem; }
+  .filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; font-size: .9rem; }
   .filters input[type=text] { width: 16rem; }
   .filters input[type=number] { width: 5rem; }
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
@@ -18,7 +23,7 @@
   tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
   td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
   td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
-  th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; background: Canvas; }
+  th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: Canvas; box-shadow: 0 1px 0 #8884; } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted::after { content: "\00a0▲"; opacity: .7; }
   th.sorted.desc::after { content: "\00a0▼"; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -31,6 +36,7 @@
 </style>
 </head>
 <body>
+<header>
 <h1><span title="sakumaki">サク巻き</span> <span class="sub">__SUBTITLE__</span></h1>
 <div class="filters">
   <input id="q" type="text" placeholder="Cerca nel titolo…">
@@ -43,6 +49,8 @@
   <label><input id="hideWatchlist" type="checkbox"> non in watchlist</label>
   <span id="count"></span>
 </div>
+</header>
+<div class="scroller">
 <table>
   <thead><tr>
     <th data-k="title">Titolo</th>
@@ -57,6 +65,7 @@
   </tr></thead>
   <tbody id="rows"></tbody>
 </table>
+</div>
 <script id="data" type="application/json">__ROWS__</script>
 <script>
   const rows = JSON.parse(document.getElementById("data").textContent);

@@ -3,6 +3,8 @@ name: update
 on:
   schedule:
     - cron: "0 5 * * *" # 07:00 Europe/Rome in estate, 06:00 in inverno
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
