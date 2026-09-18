@@ -1,5 +1,6 @@
 import type { SeriesObject, WatchlistItem } from "./api";
-import { SITE_BASE } from "./constants";
+const SITE_BASE = Bun.env.SITE_BASE;
+if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
 /**
  * Da data/catalog.ndjson (opzionalmente filtrato per voto medio >= MIN_RATING) produce:

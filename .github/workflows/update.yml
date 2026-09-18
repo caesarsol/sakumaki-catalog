@@ -19,13 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
+      API_BASE: ${{ secrets.API_BASE }} # gli host sono secret, non variabili: nei log pubblici vengono mascherati
+      SITE_BASE: ${{ secrets.SITE_BASE }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      # src/constants.ts (host del servizio) non è nel repo: il secret ne contiene il testo intero
-      - run: printf '%s\n' "$CONSTANTS_TS" > src/constants.ts
-        env:
-          CONSTANTS_TS: ${{ secrets.CONSTANTS_TS }}
       - run: bun install --frozen-lockfile
       - run: bun run watchlist
       - run: bun run watchlist-votes

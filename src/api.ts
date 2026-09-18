@@ -3,7 +3,9 @@
  * Auth: il cookie di sessione `etp_rt` viene scambiato con un bearer token
  * tramite il grant `etp_rt_cookie`; il client id è quello pubblico del sito web.
  */
-import { API_BASE as BASE } from "./constants";
+// Gli host stanno in .env / nei secret di CI (API_BASE, SITE_BASE): il nome del servizio non deve comparire nel repo.
+const BASE = Bun.env.API_BASE;
+if (!BASE) throw new Error("API_BASE mancante in .env (vedi .env.example)");
 
 const WEB_CLIENT_BASIC = "bm9haWhkZXZtXzZpeWcwYThsMHE6"; // base64("noaihdevm_6iyg0a8l0q:")
 const UA =
