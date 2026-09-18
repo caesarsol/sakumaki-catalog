@@ -42,7 +42,6 @@
   <input id="q" type="text" placeholder="Cerca nel titolo…">
   <label>Genere <select id="genre"><option value="">tutti</option></select></label>
   <label>Voto ≥ <input id="minRating" type="number" step="0.01" min="0" max="5" value="0"></label>
-  <label>V Bayes ≥ <input id="minWeighted" type="number" step="0.01" min="0" max="5" value="0"></label>
   <label>Votanti ≥ <input id="minVotes" type="number" step="1000" min="0" value="0"></label>
   <label title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></label>
   <label><input id="onlyWatchlist" type="checkbox"> solo in watchlist</label>
@@ -83,7 +82,7 @@
   function render() {
     const q = $("q").value.trim().toLowerCase();
     const genre = $("genre").value;
-    const minRating = Number($("minRating").value) || 0, minWeighted = Number($("minWeighted").value) || 0;
+    const minRating = Number($("minRating").value) || 0;
     const minVotes = Number($("minVotes").value) || 0;
     const only = $("onlyWatchlist").checked, hide = $("hideWatchlist").checked;
     const m = Number($("m").value) || 0, C = __C__; // media del catalogo intero, calcolata da table.ts
@@ -91,7 +90,7 @@
     const visible = rows.filter((r) =>
       (!q || r.title.toLowerCase().includes(q)) &&
       (!genre || r.genres.includes(genre)) &&
-      r.rating >= minRating && r.weighted >= minWeighted && r.votes >= minVotes &&
+      r.rating >= minRating && r.votes >= minVotes &&
       (!only || r.in_watchlist) && (!hide || !r.in_watchlist));
     const { key, desc } = state;
     visible.sort((a, b) => {
@@ -124,7 +123,7 @@
     state.key = k;
     render();
   };
-  for (const id of ["q", "genre", "minRating", "minWeighted", "minVotes", "m", "onlyWatchlist", "hideWatchlist"]) $(id).oninput = render;
+  for (const id of ["q", "genre", "minRating", "minVotes", "m", "onlyWatchlist", "hideWatchlist"]) $(id).oninput = render;
   render();
 </script>
 </body>
