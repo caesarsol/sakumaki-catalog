@@ -71,7 +71,7 @@
 <script>
   const rows = JSON.parse(document.getElementById("data").textContent);
   const $ = (id) => document.getElementById(id);
-  const state = { key: "weighted", desc: true };
+  const state = { key: "rating", desc: true };
 
   const genres = [...new Set(rows.flatMap((r) => r.genres))].sort();
   for (const g of genres) $("genre").append(new Option(g, g));
