@@ -27,6 +27,8 @@
   th.sorted::after { content: "\00a0▲"; opacity: .7; }
   th.sorted.desc::after { content: "\00a0▼"; }
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
+  th.flag, td.flag { text-align: center; }
+  td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
   .genres { opacity: .8; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; }
   .bar span { border-radius: 1px; min-width: 0; }
@@ -71,6 +73,13 @@
   const rows = JSON.parse(document.getElementById("data").textContent);
   const $ = (id) => document.getElementById(id);
   const state = { key: "rating", desc: true };
+  const countries = __COUNTRIES__;
+  const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+  for (const c of countries) {
+    const th = document.createElement("th");
+    th.className = "flag"; th.dataset.k = `c:${c.iso2}`; th.textContent = c.iso2; th.title = `${flag(c.iso2)} disponibile in ${c.iso2}`;
+    document.querySelector("thead tr").append(th);
+  }
 
   const genres = [...new Set(rows.flatMap((r) => r.genres))].sort();
   for (const g of genres) $("genre").append(new Option(g, g));
@@ -94,7 +103,8 @@
       (!only || r.in_watchlist) && (!hide || !r.in_watchlist));
     const { key, desc } = state;
     visible.sort((a, b) => {
-      const x = a[key] ?? "", y = b[key] ?? "";
+      const val = (r) => (key.startsWith("c:") ? r.countries.includes(key.slice(2)) : r[key] ?? "");
+      const x = val(a), y = val(b);
       const c = typeof x === "number" || typeof x === "boolean" ? x - y : String(x).localeCompare(String(y));
       return desc ? -c : c;
     });
@@ -109,6 +119,7 @@
       <td class="num">${r.seasons}</td>
       <td class="num">${r.episodes}</td>
       <td>${yes(r.in_watchlist)}</td>
+      ${countries.map((c) => `<td class="flag">${r.countries.includes(c.iso2) ? flag(c.iso2) : ""}</td>`).join("")}
     </tr>`).join("");
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
     for (const th of document.querySelectorAll("th")) {

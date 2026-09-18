@@ -5,6 +5,7 @@
   "scripts": {
     "watchlist": "bun run src/watchlist.ts",
     "catalog": "bun run src/catalog.ts",
+    "merge": "bun run src/merge.ts",
     "table": "bun run src/table.ts",
     "watchlist-votes": "bun run src/watchlist-votes.ts",
     "typecheck": "bun x tsc --noEmit"

@@ -1,4 +1,5 @@
 import type { SeriesObject, WatchlistItem } from "./api";
+import { COUNTRIES } from "./countries";
 const SITE_BASE = Bun.env.SITE_BASE;
 if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
@@ -14,7 +15,8 @@ const dataDir = `${import.meta.dir}/../data`;
 const readNdjson = async <T>(path: string): Promise<T[]> =>
   (await Bun.file(path).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
-const catalog = await readNdjson<SeriesObject>(`${dataDir}/catalog.ndjson`);
+const catalog = await readNdjson<SeriesObject & { countries: string[] }>(`${dataDir}/catalog.ndjson`);
+const countries = COUNTRIES.filter((c) => catalog.some((s) => s.countries.includes(c.iso2))); // solo i paesi presenti nei dati: un download fallito non lascia una colonna vuota
 const watchlistFile = Bun.file(`${dataDir}/watchlist.json`);
 const inWatchlist = new Set<string>();
 if (await watchlistFile.exists()) {
@@ -84,11 +86,13 @@ const rows = top.map((s) => ({
   simulcast: s.series_metadata.is_simulcast,
   dubbed: s.series_metadata.is_dubbed,
   in_watchlist: s.in_watchlist,
+  countries: s.countries,
 }));
 const template = await Bun.file(`${import.meta.dir}/table.html`).text();
 const html = template
   .replaceAll("__SUBTITLE__", MIN_RATING > 0 ? `serie con voto ≥ ${MIN_RATING}` : "catalogo serie")
   .replace("__M__", String(WEIGHT_VOTES))
+  .replace("__COUNTRIES__", JSON.stringify(countries))
   .replace("__C__", String(round3(catalogMean)))
   .replace("__ROWS__", JSON.stringify(rows).replaceAll("</", "<\\/"));
 await Bun.write(`${dataDir}/table.html`, html);

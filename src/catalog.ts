@@ -1,10 +1,44 @@
-import { fetchCatalog, login } from "./api";
+import { fetchCatalog, loginAnonymous, pause, type SeriesObject } from "./api";
+import { COUNTRIES, type Country } from "./countries";
+import { randomProxy } from "./nordvpn";
 
-const etpRt = Bun.env.AUTH_COOKIE;
-if (!etpRt) throw new Error("AUTH_COOKIE mancante: copia il cookie di sessione in .env (vedi .env.example)");
+/**
+ * Legge il catalogo da ogni paese in COUNTRIES con un token anonimo attraverso un proxy NordVPN e salva
+ * data/catalog-<ISO2>.ndjson (la fusione la fa merge.ts). Un paese fallito non ferma gli altri: esce con 1 alla fine.
+ */
+const dataDir = `${import.meta.dir}/../data`;
+const ndjson = (rows: unknown[]) => rows.map((r) => JSON.stringify(r)).join("\n") + "\n";
 
-const token = await login(etpRt);
-const series = await fetchCatalog(token);
-const out = `${import.meta.dir}/../data/catalog.ndjson`;
-await Bun.write(out, series.map((s) => JSON.stringify(s)).join("\n") + "\n");
-console.log(`${series.length} serie salvate in ${out}`);
+/** Fino a 3 server diversi: un proxy può essere giù, o l'API può vederci in un paese diverso da quello atteso. */
+async function catalogFrom(country: Country): Promise<SeriesObject[]> {
+  for (let attempt = 1; ; attempt++) {
+    const proxy = await randomProxy(country.nordId);
+    try {
+      const token = await loginAnonymous(proxy.url);
+      if (token.country !== country.iso2) throw new Error(`visti come ${token.country}`);
+      return await fetchCatalog(token, "en-US", proxy.url);
+    } catch (e) {
+      console.warn(`${country.iso2} via ${proxy.host}, tentativo ${attempt}: ${(e as Error).message}`);
+      if (attempt === 3) throw e;
+      await pause();
+    }
+  }
+}
+
+const only = Bun.argv.slice(2); // es. `bun run catalog IN AU` per rifare solo alcuni paesi
+const targets = only.length ? COUNTRIES.filter((c) => only.includes(c.iso2)) : COUNTRIES;
+const failed: string[] = [];
+for (const country of targets) {
+  try {
+    const series = await catalogFrom(country);
+    await Bun.write(`${dataDir}/catalog-${country.iso2}.ndjson`, ndjson(series));
+    console.log(`${country.iso2}: ${series.length} serie`);
+  } catch {
+    failed.push(country.iso2);
+  }
+  await pause();
+}
+if (failed.length) {
+  console.error(`paesi falliti: ${failed.join(", ")}`);
+  process.exit(1);
+}
