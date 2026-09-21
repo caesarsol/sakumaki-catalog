@@ -88,7 +88,6 @@ const rows = top.map((s) => ({
   // -1 e non null: l'ordinamento confronta numeri, e le serie fuori watchlist finiscono in fondo
   wl_season: progress[s.id]?.season ?? -1,
   wl_episode: progress[s.id]?.episode ?? -1,
-  wl_playhead: progress[s.id]?.playhead ?? -1,
   wl_watched: progress[s.id]?.fully_watched ?? false,
   wl_new: progress[s.id]?.never_watched ?? false,
   wl_fav: progress[s.id]?.is_favorite ?? false,

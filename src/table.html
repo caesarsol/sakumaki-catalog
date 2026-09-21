@@ -140,8 +140,7 @@
     <th data-k="episodes" data-num>Episodi</th>
     <!-- le colonne dei paesi vengono inserite qui, prima del blocco personale che chiude la tabella -->
     <th data-k="in_watchlist" data-num title="★ preferita, ✓ in watchlist">Watchlist</th>
-    <th data-k="wl_episode" data-num title="la puntata a cui sei arrivato secondo la watchlist: non è quante ne hai viste, è dove riprende">Puntata</th>
-    <th data-k="wl_playhead" data-num title="minuti già visti di quella puntata; ✓ quando l'hai finita">Playhead</th>
+    <th data-k="wl_episode" data-num title="la puntata a cui sei arrivato secondo la watchlist: non è quante ne hai viste, è dove riprende; ✓ quando quella puntata l'hai finita">Puntata</th>
   </tr></thead>
   <tbody id="rows"></tbody>
 </table>
@@ -172,14 +171,10 @@
 
   const fmt = new Intl.NumberFormat("it-IT");
   const yes = (b) => (b ? "✓" : "");
-  const clock = (sec) => { // i playhead lunghi sono minuti, non ore: h solo quando serve
-    const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
-    return (h ? `${h}:${String(m).padStart(2, "0")}` : `${m}`) + `:${String(s).padStart(2, "0")}`;
-  };
   const episodeLabel = (r) => (r.wl_season < 0 ? "" : `S${r.wl_season}${r.wl_episode >= 0 ? `·E${r.wl_episode}` : ""}`);
   const watchlistTitle = (r) =>
     !r.in_watchlist ? "non in watchlist"
-    : [r.wl_fav ? "preferita" : "in watchlist", episodeLabel(r), r.wl_watched ? "puntata finita" : r.wl_new ? "mai iniziata" : r.wl_playhead > 0 ? `ripresa a ${clock(r.wl_playhead)}` : ""].filter(Boolean).join(" · ");
+    : [r.wl_fav ? "preferita" : "in watchlist", episodeLabel(r), r.wl_watched ? "puntata finita" : r.wl_new ? "mai iniziata" : "iniziata"].filter(Boolean).join(" · ");
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   /* ---- filtri multi-selezione a tre stati -------------------------------------------------
@@ -290,8 +285,7 @@
       <td class="num">${r.episodes}</td>
       ${countries.map((c) => `<td class="flag">${r.countries.includes(c.iso2) ? flag(c.iso2) : ""}</td>`).join("")}
       <td class="mine start" title="${esc(watchlistTitle(r))}">${r.wl_fav ? "★" : yes(r.in_watchlist)}</td>
-      <td class="num mine">${episodeLabel(r)}</td>
-      <td class="num mine">${r.wl_playhead > 0 ? clock(r.wl_playhead) : ""}${r.wl_watched ? " ✓" : ""}</td>
+      <td class="num mine">${episodeLabel(r)}${r.wl_watched ? " ✓" : ""}</td>
     </tr>`).join("");
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
     renderSort();
