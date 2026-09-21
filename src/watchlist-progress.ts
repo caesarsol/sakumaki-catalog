@@ -41,5 +41,11 @@ if (import.meta.main) {
   const progress = progressBySeries(data);
   const out = `${dataDir}/watchlist-progress.json`;
   await Bun.write(out, JSON.stringify(progress));
-  console.log(`${Object.keys(progress).length} serie salvate in ${out}`);
+  const v = Object.values(progress);
+  const n = (f: (p: Progress) => boolean) => v.filter(f).length;
+  // Il riepilogo finisce nel log del workflow, che si legge anche da fuori: l'artifact no.
+  console.log(
+    `${v.length} serie salvate in ${out}: ${n((p) => p.fully_watched)} con la puntata finita, ` +
+      `${n((p) => p.never_watched)} mai iniziate, ${n((p) => !p.fully_watched && !p.never_watched)} a metà, ${n((p) => p.is_favorite)} preferite`,
+  );
 }

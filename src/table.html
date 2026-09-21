@@ -51,7 +51,12 @@
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
   th, td { padding: 6px 5px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
   th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
-  td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
+  /* Colonna del titolo congelata a sinistra: scorrendo fino alle bandiere si continua a vedere di che riga si tratta.
+     Serve uno sfondo opaco, o il resto della riga le passa sotto, e uno z-index sopra le altre celle. */
+  td.title, th[data-k="title"] { position: sticky; left: 0; background: var(--bg); }
+  td.title { z-index: 1; box-shadow: 1px 0 0 var(--line); }
+  th[data-k="title"] { z-index: 2; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); } /* sticky in alto e a sinistra: sopra tutti, e si tiene anche il bordo inferiore dell'intestazione */
+  td.title { min-width: 16rem; max-width: 0; width: 26%; padding-right: 8px; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
   td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
