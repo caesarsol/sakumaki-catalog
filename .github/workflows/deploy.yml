@@ -35,7 +35,7 @@ jobs:
       - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data # catalogo dell'ultimo run settimanale riuscito
         env:
           GH_TOKEN: ${{ github.token }}
-      - run: gh run download "$(gh run list --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name watchlist --dir data # id della watchlist dell'ultimo run riuscito
+      - run: gh run download "$(gh run list --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name watchlist --dir data # avanzamento della watchlist dell'ultimo run riuscito
         continue-on-error: true # se manca, la pagina esce lo stesso, solo con la colonna Watchlist vuota
         env:
           GH_TOKEN: ${{ github.token }}

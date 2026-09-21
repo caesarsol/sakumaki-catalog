@@ -22,12 +22,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run watchlist
-      - run: bun run watchlist-ids
+      - run: bun run watchlist-progress
       - run: bun run watchlist-votes
       - uses: actions/upload-artifact@v4
         with:
           name: watchlist
-          path: data/watchlist-ids.json # solo gli id: gli artifact di un repo pubblico sono pubblici, e watchlist.json contiene anche playhead e preferiti
+          path: data/watchlist-progress.json # solo l'avanzamento che la pagina mostra: gli artifact di un repo pubblico sono pubblici, e watchlist.json contiene anche id e titoli delle puntate
           retention-days: 30
       - run: gh workflow run deploy.yml # ripubblica la pagina con la watchlist di stamattina
         env:

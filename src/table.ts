@@ -1,5 +1,6 @@
 import type { SeriesObject, WatchlistItem } from "./api";
 import { COUNTRIES } from "./countries";
+import { progressBySeries, type Progress } from "./watchlist-progress";
 const SITE_BASE = Bun.env.SITE_BASE;
 if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
@@ -17,15 +18,11 @@ const readNdjson = async <T>(path: string): Promise<T[]> =>
 
 const catalog = await readNdjson<SeriesObject & { countries: string[] }>(`${dataDir}/catalog.ndjson`);
 const countries = COUNTRIES.filter((c) => catalog.some((s) => s.countries.includes(c.iso2))); // solo i paesi presenti nei dati: un download fallito non lascia una colonna vuota
-const inWatchlist = new Set<string>();
-const idsFile = Bun.file(`${dataDir}/watchlist-ids.json`); // in CI arriva solo questo elenco di id (vedi watchlist-ids.ts)
+let progress: Record<string, Progress> = {};
+const progressFile = Bun.file(`${dataDir}/watchlist-progress.json`); // in CI arriva solo questo (vedi watchlist-progress.ts)
 const watchlistFile = Bun.file(`${dataDir}/watchlist.json`); // in locale di solito c'è la watchlist intera
-if (await idsFile.exists()) {
-  for (const id of (await idsFile.json()) as string[]) inWatchlist.add(id);
-} else if (await watchlistFile.exists()) {
-  const { data }: { data: WatchlistItem[] } = await watchlistFile.json();
-  for (const w of data) if (w.panel.episode_metadata) inWatchlist.add(w.panel.episode_metadata.series_id);
-}
+if (await progressFile.exists()) progress = await progressFile.json();
+else if (await watchlistFile.exists()) progress = progressBySeries(((await watchlistFile.json()) as { data: WatchlistItem[] }).data);
 
 /** Media e deviazione standard dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
 function starStats(s: SeriesObject): { mean: number; sd: number } {
@@ -66,7 +63,7 @@ const top = catalog
     rating_fine: round3(fineRating(s)),
     rating_weighted: round3(weighted(s)),
     rating_lcb: round3(lowerBound(s)),
-    in_watchlist: inWatchlist.has(s.id),
+    in_watchlist: !!progress[s.id],
   }))
   .sort((a, b) => b.rating_weighted - a.rating_weighted);
 
@@ -88,6 +85,13 @@ const rows = top.map((s) => ({
   simulcast: s.series_metadata.is_simulcast,
   dubbed: s.series_metadata.is_dubbed,
   in_watchlist: s.in_watchlist,
+  // -1 e non null: l'ordinamento confronta numeri, e le serie fuori watchlist finiscono in fondo
+  wl_season: progress[s.id]?.season ?? -1,
+  wl_episode: progress[s.id]?.episode ?? -1,
+  wl_playhead: progress[s.id]?.playhead ?? -1,
+  wl_watched: progress[s.id]?.fully_watched ?? false,
+  wl_new: progress[s.id]?.never_watched ?? false,
+  wl_fav: progress[s.id]?.is_favorite ?? false,
   countries: s.countries,
 }));
 const template = await Bun.file(`${import.meta.dir}/table.html`).text();

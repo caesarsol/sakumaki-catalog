@@ -61,6 +61,7 @@
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
   th.flag, td.flag { text-align: center; }
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
+  th[data-k="in_watchlist"], td.mine.start { border-left: 1px solid var(--line); padding-left: 8px; } /* stacca il blocco personale dalle bandiere */
   .genres { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; }
   .bar span { border-radius: 1px; min-width: 0; }
@@ -137,7 +138,10 @@
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num>Stagioni</th>
     <th data-k="episodes" data-num>Episodi</th>
-    <th data-k="in_watchlist" data-num>Watchlist</th>
+    <!-- le colonne dei paesi vengono inserite qui, prima del blocco personale che chiude la tabella -->
+    <th data-k="in_watchlist" data-num title="★ preferita, ✓ in watchlist">Watchlist</th>
+    <th data-k="wl_episode" data-num title="la puntata a cui sei arrivato secondo la watchlist: non è quante ne hai viste, è dove riprende">Puntata</th>
+    <th data-k="wl_playhead" data-num title="minuti già visti di quella puntata; ✓ quando l'hai finita">Playhead</th>
   </tr></thead>
   <tbody id="rows"></tbody>
 </table>
@@ -150,11 +154,12 @@
   const $ = (id) => document.getElementById(id);
   const countries = __COUNTRIES__;
   const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+  const firstOwnTh = document.querySelector('th[data-k="in_watchlist"]'); // il blocco personale chiude la tabella: le bandiere vanno prima
   for (const c of countries) {
     const th = document.createElement("th");
     th.className = "flag"; th.dataset.k = `c:${c.iso2}`; th.dataset.num = ""; th.dataset.label = `${flag(c.iso2)} ${c.iso2}`;
     th.textContent = c.iso2; th.title = `${flag(c.iso2)} disponibile in ${c.iso2}`;
-    document.querySelector("thead tr").append(th);
+    firstOwnTh.before(th);
   }
   const ths = [...document.querySelectorAll("thead th")];
   // La distribuzione è una colonna sola ma cinque criteri: `s:5` … `s:1`, la quota di ciascuna stella.
@@ -167,6 +172,14 @@
 
   const fmt = new Intl.NumberFormat("it-IT");
   const yes = (b) => (b ? "✓" : "");
+  const clock = (sec) => { // i playhead lunghi sono minuti, non ore: h solo quando serve
+    const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    return (h ? `${h}:${String(m).padStart(2, "0")}` : `${m}`) + `:${String(s).padStart(2, "0")}`;
+  };
+  const episodeLabel = (r) => (r.wl_season < 0 ? "" : `S${r.wl_season}${r.wl_episode >= 0 ? `·E${r.wl_episode}` : ""}`);
+  const watchlistTitle = (r) =>
+    !r.in_watchlist ? "non in watchlist"
+    : [r.wl_fav ? "preferita" : "in watchlist", episodeLabel(r), r.wl_watched ? "puntata finita" : r.wl_new ? "mai iniziata" : r.wl_playhead > 0 ? `ripresa a ${clock(r.wl_playhead)}` : ""].filter(Boolean).join(" · ");
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   /* ---- filtri multi-selezione a tre stati -------------------------------------------------
@@ -275,8 +288,10 @@
       <td class="num">${r.year ?? ""}</td>
       <td class="num">${r.seasons}</td>
       <td class="num">${r.episodes}</td>
-      <td>${yes(r.in_watchlist)}</td>
       ${countries.map((c) => `<td class="flag">${r.countries.includes(c.iso2) ? flag(c.iso2) : ""}</td>`).join("")}
+      <td class="mine start" title="${esc(watchlistTitle(r))}">${r.wl_fav ? "★" : yes(r.in_watchlist)}</td>
+      <td class="num mine">${episodeLabel(r)}</td>
+      <td class="num mine">${r.wl_playhead > 0 ? clock(r.wl_playhead) : ""}${r.wl_watched ? " ✓" : ""}</td>
     </tr>`).join("");
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
     renderSort();
