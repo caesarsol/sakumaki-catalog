@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>サク巻き · __SUBTITLE__</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.css">
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; --bg: #f2f2f0; }
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; --bg: #f2f2f0; --panel: #fff; --line: #8884; --in: #1a7f37; --out: #c0392b; }
   :root { --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; } /* rampa ordinale blu, validata (dataviz) */
-  @media (prefers-color-scheme: dark) { :root { --s1: #9ec5f4; --s2: #6da7ec; --s3: #3987e5; --s4: #256abf; --s5: #184f95; --bg: #1c1c1c; } }
+  @media (prefers-color-scheme: dark) { :root { --s1: #9ec5f4; --s2: #6da7ec; --s3: #3987e5; --s4: #256abf; --s5: #184f95; --bg: #1c1c1c; --panel: #262626; --in: #4ec26f; --out: #ef6f5e; } }
   /* Layout a colonna a tutta altezza: titolo e filtri fissi, solo .scroller scorre (in entrambe le direzioni); l'intestazione della tabella è sticky dentro di esso. */
   html, body { height: 100%; }
   body { margin: 0; display: flex; flex-direction: column; background: var(--bg); }
@@ -16,16 +17,17 @@
   h1 { font-size: clamp(2rem, 8vw, 3.2rem); margin: 0 0 16px; }
   h1 .sub { font-weight: normal; opacity: .7; margin-left: 12px; }
   .filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; font-size: .9rem; }
+  .filters label { display: inline-flex; align-items: center; gap: 6px; } /* senza, l'etichetta di un multi-select finisce sopra il campo */
   .filters input[type=text] { width: 16rem; }
   .filters input[type=number] { width: 5rem; }
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
-  th, td { padding: 6px 5px; border-bottom: 1px solid #8884; text-align: left; vertical-align: middle; white-space: nowrap; }
+  th, td { padding: 6px 5px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
   th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
   td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
   td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
-  th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 #8884; } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
-  th.sorted::after { content: "\00a0▲"; opacity: .7; }
-  th.sorted.desc::after { content: "\00a0▼"; }
+  th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
+  th.sorted::after { content: "\00a0▲" attr(data-ord); opacity: .7; } /* data-ord: posizione nella pila di ordinamento, vuota quando il criterio è uno solo */
+  th.sorted.desc::after { content: "\00a0▼" attr(data-ord); }
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
   th.flag, td.flag { text-align: center; }
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
@@ -35,6 +37,35 @@
   .legend { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
   .legend i { width: 10px; height: 10px; border-radius: 1px; display: inline-block; }
   #count { opacity: .7; margin-left: auto; }
+
+  /* Tom Select: chip a tre stati (assente → incluso → escluso), il clic sul chip inverte il segno, la ✕ lo toglie. */
+  .ts-wrapper { width: 17rem; font-size: .9rem; } /* larghezza fissa: i chip vanno a capo dentro il campo invece di allargare la barra */
+  .ts-wrapper.multi .ts-control { background: var(--panel); border-color: var(--line); padding: 2px 4px; }
+  .ts-dropdown, .ts-control, .ts-control input { color: inherit; }
+  .ts-dropdown { background: var(--panel); border-color: var(--line); }
+  .ts-dropdown .active { background: color-mix(in srgb, currentColor 12%, transparent); color: inherit; } /* il grigio scuro di Tom Select sparisce sul tema scuro */
+  .ts-wrapper.multi .ts-control > .item { cursor: pointer; border-radius: 4px; border: 1px solid; padding: 1px 6px; }
+  .ts-wrapper.multi .ts-control > .item.in { color: var(--in); border-color: color-mix(in srgb, var(--in) 50%, transparent); background: color-mix(in srgb, var(--in) 12%, transparent); }
+  .ts-wrapper.multi .ts-control > .item.out { color: var(--out); border-color: color-mix(in srgb, var(--out) 50%, transparent); background: color-mix(in srgb, var(--out) 12%, transparent); text-decoration: line-through; }
+  .ts-wrapper.multi .ts-control > .item.in::before { content: "＋ "; text-decoration: none; }
+  .ts-wrapper.multi .ts-control > .item.out::before { content: "− "; text-decoration: none; }
+  .ts-wrapper.multi .ts-control > .item .remove { border-left-color: currentColor; opacity: .6; }
+
+  /* Pannello di ordinamento multiplo */
+  .sortbox { position: relative; }
+  .sortbox > button { font: inherit; cursor: pointer; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; }
+  #sortPanel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 22rem; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0003; }
+  #sortPanel[hidden] { display: none; }
+  #sortList { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  #sortList li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: color-mix(in srgb, currentColor 5%, transparent); }
+  #sortList li.empty { justify-content: center; opacity: .6; border-style: dashed; }
+  #sortList .grip { cursor: grab; opacity: .5; }
+  #sortList .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #sortList button { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: inherit; padding: 1px 6px; }
+  #sortPanel .row { display: flex; gap: 6px; }
+  #sortPanel select { flex: 1; font: inherit; font-size: .9em; background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
+  #sortPanel .hint { margin: 8px 0 0; font-size: .78rem; opacity: .65; line-height: 1.35; }
+  .sortable-ghost { opacity: .4; }
 </style>
 </head>
 <body>
@@ -42,12 +73,22 @@
 <h1><span title="sakumaki">サク巻き</span> <span class="sub">__SUBTITLE__</span></h1>
 <div class="filters">
   <input id="q" type="text" placeholder="Cerca nel titolo…">
-  <label>Genere <select id="genre"><option value="">tutti</option></select></label>
-  <label>Voto ≥ <input id="minRating" type="number" step="0.01" min="0" max="5" value="0"></label>
-  <label>Votanti ≥ <input id="minVotes" type="number" step="1000" min="0" value="0"></label>
+  <label>Paesi <select id="fCountries" multiple placeholder="tutti"></select></label>
+  <label>Generi <select id="fGenres" multiple placeholder="tutti"></select></label>
   <label title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></label>
   <label><input id="onlyWatchlist" type="checkbox"> solo in watchlist</label>
   <label><input id="hideWatchlist" type="checkbox"> non in watchlist</label>
+  <div class="sortbox">
+    <button id="sortBtn" type="button" aria-expanded="false">Ordinamento <span id="sortCount"></span></button>
+    <div id="sortPanel" hidden>
+      <ul id="sortList"></ul>
+      <div class="row">
+        <select id="sortAdd"><option value="">Aggiungi criterio…</option></select>
+        <button id="sortClear" type="button">Azzera</button>
+      </div>
+      <p class="hint">Trascina ⠿ per cambiare la priorità. Anche il clic su un'intestazione accumula: primo clic aggiunge il criterio in coda, il secondo inverte il verso, il terzo lo toglie.</p>
+    </div>
+  </div>
   <span id="count"></span>
 </div>
 </header>
@@ -59,55 +100,124 @@
     <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
     <th data-k="votes" data-num>Votanti</th>
-    <th data-k="five" data-num title="1★→5★ chiaro→scuro; larghezze ∝ √quota per rendere leggibile la coda; ordina per quota di 5★">Distribuzione <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
+    <th data-k="five" data-num data-label="Distribuzione" title="1★→5★ chiaro→scuro; larghezze ∝ √quota per rendere leggibile la coda; ordina per quota di 5★">Distribuzione <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num>Stagioni</th>
     <th data-k="episodes" data-num>Episodi</th>
-    <th data-k="in_watchlist">Watchlist</th>
+    <th data-k="in_watchlist" data-num>Watchlist</th>
   </tr></thead>
   <tbody id="rows"></tbody>
 </table>
 </div>
 <script id="data" type="application/json">__ROWS__</script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>
   const rows = JSON.parse(document.getElementById("data").textContent);
   const $ = (id) => document.getElementById(id);
-  const state = { key: "rating", desc: true };
   const countries = __COUNTRIES__;
   const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
   for (const c of countries) {
     const th = document.createElement("th");
-    th.className = "flag"; th.dataset.k = `c:${c.iso2}`; th.textContent = c.iso2; th.title = `${flag(c.iso2)} disponibile in ${c.iso2}`;
+    th.className = "flag"; th.dataset.k = `c:${c.iso2}`; th.dataset.num = ""; th.dataset.label = `${flag(c.iso2)} ${c.iso2}`;
+    th.textContent = c.iso2; th.title = `${flag(c.iso2)} disponibile in ${c.iso2}`;
     document.querySelector("thead tr").append(th);
   }
-
-  const genres = [...new Set(rows.flatMap((r) => r.genres))].sort();
-  for (const g of genres) $("genre").append(new Option(g, g));
+  const ths = [...document.querySelectorAll("thead th")];
+  const columns = ths.map((th) => ({ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }));
+  const labelOf = (k) => columns.find((c) => c.k === k)?.label ?? k;
 
   const fmt = new Intl.NumberFormat("it-IT");
   const yes = (b) => (b ? "✓" : "");
-  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
+  /* ---- filtri multi-selezione a tre stati -------------------------------------------------
+     Un valore è assente (nessun vincolo), incluso o escluso; la ✕ del chip lo riporta assente.
+     Inclusi in AND, esclusi in AND: "presenti in IT ma non in US" = +IT −US. */
+  function triFilter(select, options, placeholder) {
+    const modes = new Map(); // value -> "in" | "out"; l'assenza dai chip è il terzo stato
+    const ts = new TomSelect(select, {
+      options, placeholder, maxItems: null, hideSelected: true, closeAfterSelect: false,
+      hidePlaceholder: true, // "tutti i paesi" con dei chip già scelti sarebbe una bugia
+      plugins: ["remove_button"],
+      render: {
+        item: (d, escape) => `<div class="${modes.get(d.value) === "out" ? "out" : "in"}" data-v="${escape(d.value)}" title="clic per invertire (incluso ↔ escluso), ✕ per togliere">${escape(d.text)}</div>`,
+      },
+      onItemAdd() { this.setTextboxValue(""); this.refreshOptions(false); }, // con closeAfterSelect: false il testo cercato resterebbe nella casella
+      onItemRemove: (v) => modes.delete(v),
+      onChange: render,
+    });
+    // In cattura, prima di Tom Select, che sul chip userebbe mousedown per "attivarlo" e click per riaprire la lista.
+    const onChip = (e) => {
+      const item = e.target.closest("[data-v]");
+      if (!item || e.target.closest(".remove")) return; // la ✕ resta a Tom Select: toglie il valore, cioè il terzo stato
+      e.preventDefault(); e.stopPropagation();
+      if (e.type !== "mousedown") return;
+      const out = modes.get(item.dataset.v) !== "out";
+      modes.set(item.dataset.v, out ? "out" : "in");
+      item.classList.toggle("out", out); item.classList.toggle("in", !out);
+      ts.close(); // senza, la lista aperta copre la tabella e si mangia il clic successivo
+      render();
+    };
+    for (const type of ["mousedown", "click"]) ts.control.addEventListener(type, onChip, true);
+    return {
+      get in() { return ts.items.filter((v) => modes.get(v) !== "out"); },
+      get out() { return ts.items.filter((v) => modes.get(v) === "out"); },
+    };
+  }
+  const fCountries = triFilter($("fCountries"), countries.map((c) => ({ value: c.iso2, text: `${flag(c.iso2)} ${c.iso2}` })), "tutti i paesi");
+  const fGenres = triFilter($("fGenres"), [...new Set(rows.flatMap((r) => r.genres))].sort().map((g) => ({ value: g, text: g })), "tutti i generi");
+
+  /* ---- ordinamento multiplo ----------------------------------------------------------------
+     `sorts` è la pila di criteri in ordine di priorità, condivisa da intestazioni e pannello. */
+  let sorts = [{ k: "weighted", desc: true }];
+  const value = (r, k) => (k.startsWith("c:") ? r.countries.includes(k.slice(2)) : r[k] ?? "");
+  const compare = (a, b) => {
+    for (const { k, desc } of sorts) {
+      const x = value(a, k), y = value(b, k);
+      const c = typeof x === "number" || typeof x === "boolean" ? x - y : String(x).localeCompare(String(y));
+      if (c) return desc ? -c : c;
+    }
+    return 0;
+  };
+  /** Un clic accumula: assente → verso naturale (decrescente per i numeri) → inverso → di nuovo assente. */
+  function cycle(k) {
+    const natural = columns.find((c) => c.k === k)?.num ?? false;
+    const i = sorts.findIndex((s) => s.k === k);
+    if (i < 0) sorts.push({ k, desc: natural });
+    else if (sorts[i].desc === natural) sorts[i].desc = !natural;
+    else sorts.splice(i, 1);
+  }
+  function renderSort() {
+    $("sortCount").textContent = sorts.length ? `(${sorts.length})` : "";
+    $("sortList").innerHTML = sorts.length
+      ? sorts.map((s) => `<li data-k="${esc(s.k)}"><span class="grip" title="trascina per cambiare priorità">⠿</span><span class="lbl">${esc(labelOf(s.k))}</span><button data-act="dir" title="inverti il verso">${s.desc ? "▼ desc" : "▲ asc"}</button><button data-act="rm" title="togli">✕</button></li>`).join("")
+      : `<li class="empty">nessun criterio</li>`;
+    $("sortAdd").innerHTML = `<option value="">Aggiungi criterio…</option>` +
+      columns.filter((c) => !sorts.some((s) => s.k === c.k)).map((c) => `<option value="${esc(c.k)}">${esc(c.label)}</option>`).join("");
+    const ord = "¹²³⁴⁵⁶⁷⁸⁹";
+    for (const th of ths) {
+      const i = sorts.findIndex((s) => s.k === th.dataset.k);
+      th.classList.toggle("sorted", i >= 0);
+      th.classList.toggle("desc", i >= 0 && sorts[i].desc);
+      th.dataset.ord = i >= 0 && sorts.length > 1 ? ord[i] ?? "" : "";
+    }
+  }
+
+  let ready = false; // i callback di Tom Select possono scattare durante l'inizializzazione, quando i filtri non esistono ancora
   function render() {
+    if (!ready) return;
     const q = $("q").value.trim().toLowerCase();
-    const genre = $("genre").value;
-    const minRating = Number($("minRating").value) || 0;
-    const minVotes = Number($("minVotes").value) || 0;
     const only = $("onlyWatchlist").checked, hide = $("hideWatchlist").checked;
+    const cIn = fCountries.in, cOut = fCountries.out, gIn = fGenres.in, gOut = fGenres.out;
     const m = Number($("m").value) || 0, C = __C__; // media del catalogo intero, calcolata da table.ts
     for (const r of rows) r.weighted = (r.votes * r.rating + m * C) / (r.votes + m);
     const visible = rows.filter((r) =>
       (!q || r.title.toLowerCase().includes(q)) &&
-      (!genre || r.genres.includes(genre)) &&
-      r.rating >= minRating && r.votes >= minVotes &&
+      cIn.every((c) => r.countries.includes(c)) && !cOut.some((c) => r.countries.includes(c)) &&
+      gIn.every((g) => r.genres.includes(g)) && !gOut.some((g) => r.genres.includes(g)) &&
       (!only || r.in_watchlist) && (!hide || !r.in_watchlist));
-    const { key, desc } = state;
-    visible.sort((a, b) => {
-      const val = (r) => (key.startsWith("c:") ? r.countries.includes(key.slice(2)) : r[key] ?? "");
-      const x = val(a), y = val(b);
-      const c = typeof x === "number" || typeof x === "boolean" ? x - y : String(x).localeCompare(String(y));
-      return desc ? -c : c;
-    });
+    visible.sort(compare);
     $("rows").innerHTML = visible.map((r) => `<tr>
       <td class="title"><a href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a><div class="genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></td>
       <td class="num">${r.weighted.toFixed(3)}</td>
@@ -122,19 +232,39 @@
       ${countries.map((c) => `<td class="flag">${r.countries.includes(c.iso2) ? flag(c.iso2) : ""}</td>`).join("")}
     </tr>`).join("");
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
-    for (const th of document.querySelectorAll("th")) {
-      th.classList.toggle("sorted", th.dataset.k === key);
-      th.classList.toggle("desc", th.dataset.k === key && desc);
-    }
+    renderSort();
   }
 
-  for (const th of document.querySelectorAll("th")) th.onclick = () => {
-    const k = th.dataset.k;
-    state.desc = state.key === k ? !state.desc : "num" in th.dataset;
-    state.key = k;
+  for (const th of ths) th.onclick = () => { cycle(th.dataset.k); render(); };
+  $("sortBtn").onclick = (e) => {
+    e.stopPropagation();
+    const open = $("sortPanel").hidden;
+    $("sortPanel").hidden = !open;
+    $("sortBtn").setAttribute("aria-expanded", String(open));
+  };
+  $("sortPanel").onclick = (e) => {
+    e.stopPropagation();
+    const li = e.target.closest("li[data-k]");
+    if (!li) return;
+    const s = sorts.find((x) => x.k === li.dataset.k);
+    if (e.target.dataset.act === "dir" && s) s.desc = !s.desc;
+    if (e.target.dataset.act === "rm") sorts = sorts.filter((x) => x.k !== li.dataset.k);
     render();
   };
-  for (const id of ["q", "genre", "minRating", "minVotes", "m", "onlyWatchlist", "hideWatchlist"]) $(id).oninput = render;
+  $("sortAdd").onchange = (e) => {
+    if (!e.target.value) return;
+    sorts.push({ k: e.target.value, desc: columns.find((c) => c.k === e.target.value)?.num ?? false });
+    render();
+  };
+  $("sortClear").onclick = () => { sorts = []; render(); };
+  document.addEventListener("click", (e) => { if (!e.target.closest(".sortbox")) $("sortPanel").hidden = true; });
+  new Sortable($("sortList"), { handle: ".grip", animation: 120, onEnd: () => {
+    sorts = [...$("sortList").children].map((li) => sorts.find((s) => s.k === li.dataset.k)).filter(Boolean);
+    render();
+  } });
+
+  for (const id of ["q", "m", "onlyWatchlist", "hideWatchlist"]) $(id).oninput = render;
+  ready = true;
   render();
 </script>
 </body>
