@@ -13,6 +13,8 @@
     --accent: #a4500c; --accent-weak: #a4500c1a; /* arancio scuro */
     --in: #1a7f37; --out: #c0392b; /* incluso / escluso nei filtri a tre stati */
     --h: 30px; /* altezza comune dei controlli nella barra dei filtri */
+    --strip: 6ch; /* quanto del titolo resta visibile quando la tabella è scorsa: una manciata di lettere */
+    --cell-pad: 5px; /* il padding orizzontale delle celle, che serve anche in calc() */
     --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; /* rampa ordinale blu, validata (dataviz) */
   }
   /* Layout a colonna a tutta altezza: titolo e filtri fissi, solo .scroller scorre (in entrambe le direzioni); l'intestazione della tabella è sticky dentro di esso. */
@@ -49,23 +51,27 @@
   .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
-  th, td { padding: 6px 5px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
+  th, td { padding: 6px var(--cell-pad); border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
   th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
-  td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
+  td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; font-size: .95em; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
   /* Titolo a tutta larghezza finché non si scorre; scorrendo, della colonna resta solo una striscia
-     larga cinque lettere, ancorata a sinistra, per capire su che riga si è.
-     Come: la cella è sticky con un offset negativo pari alla parte da nascondere, così si ferma
-     quando di lei resta visibile solo la striscia; il contenuto viene spinto a destra della stessa
-     quantità (--title-shift), così a restare nella striscia è l'inizio del titolo e non la sua coda.
-     Il contenuto si sposta con una transform e non con un sticky suo perché l'overflow: hidden della
-     cella lo renderebbe il suo contenitore di scorrimento, e non si muoverebbe più. */
-  td.title, th[data-k="title"] { position: sticky; left: calc(-1 * var(--title-hidden, 0px)); overflow: hidden; background: var(--bg); }
+     di cinque lettere ancorata a sinistra, per capire su che riga si è. Due sticky annidati, senza
+     un solo listener: la cella si ferma con un offset negativo pari alla parte da nascondere, e
+     dentro di lei un involucro stretto (.peek, 5ch) si ferma al bordo sinistro, portandosi dietro
+     il testo — così nella striscia resta la testa del titolo e non la sua coda.
+     Tre dettagli che rendono la cosa possibile:
+     - il ritaglio è clip-path e non overflow: hidden, che farebbe della cella il contenitore di
+       scorrimento dei figli e ne bloccherebbe lo sticky;
+     - l'involucro dev'essere più stretto della cella, perché uno sticky non esce mai dal proprio
+       contenitore: se riempisse la cella non avrebbe spazio per scorrere;
+     - il testo dentro l'involucro è più largo dell'involucro e trabocca: a tenerlo dentro la
+       colonna ci pensa il clip-path della cella, e l'ellissi resta perché .full ha una larghezza sua. */
+  td.title, th[data-k="title"] { position: sticky; left: calc(var(--strip) + var(--cell-pad) - var(--title-w, 100vw)); clip-path: inset(0); background: var(--bg); box-shadow: inset -1px 0 0 var(--line); }
   td.title { z-index: 1; }
-  th[data-k="title"] { z-index: 2; box-shadow: 0 1px 0 var(--line); } /* sticky in alto e a sinistra insieme: deve stare sopra entrambe le file */
-  td.title > *, th[data-k="title"] > * { transform: translateX(var(--title-shift, 0px)); display: block; } /* display: block perché sugli inline la transform non si applica */
-  .stuck td.title, .stuck th[data-k="title"] { box-shadow: inset -1px 0 0 var(--line); } /* il bordo della striscia compare solo quando serve */
-  .stuck th[data-k="title"] { box-shadow: inset -1px 0 0 var(--line), 0 1px 0 var(--line); }
-  td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
+  th[data-k="title"] { padding-right: 0; z-index: 2; box-shadow: inset -1px 0 0 var(--line), 0 1px 0 var(--line); } /* sticky in alto e a sinistra insieme: sopra entrambe le file, e si tiene il bordo dell'intestazione */
+  .peek { position: sticky; left: var(--cell-pad); width: var(--strip); } /* left pari al padding della cella: il testo non sobbalza quando la colonna si ferma */
+  .full { display: block; width: calc(var(--title-w, 100vw) - var(--cell-pad)); overflow: hidden; text-overflow: ellipsis; }
+  td.title a { text-decoration: none; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
   th .star { color: var(--accent); font-size: .85em; } /* quale stella sta ordinando, quando non è la 5★ */
@@ -158,7 +164,7 @@
 <div class="scroller">
 <table>
   <thead><tr>
-    <th data-k="title"><span>Titolo</span></th>
+    <th data-k="title"><div class="peek"><div class="full">Titolo</div></div></th>
     <th data-k="weighted" data-num title="media bayesiana: (v·voto + m·media catalogo)/(v+m), m regolabile nei filtri">V Bayes</th>
     <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
@@ -303,7 +309,7 @@
       (wl !== "in" || r.in_watchlist) && (wl !== "out" || !r.in_watchlist));
     visible.sort(compare);
     $("rows").innerHTML = visible.map((r) => `<tr>
-      <td class="title"><a href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a><div class="genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></td>
+      <td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div></td>
       <td class="num">${r.weighted.toFixed(3)}</td>
       <td class="num">${r.lcb.toFixed(3)}</td>
       <td class="num">${r.rating.toFixed(3)}</td>
@@ -318,34 +324,15 @@
     </tr>`).join("");
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
     renderSort();
-    if (!strip) measureStrip(); // il font si misura sulla prima riga disegnata
     syncTitle(); // la larghezza della colonna dipende da cosa è visibile
   }
 
-  /* La striscia è larga cinque lettere: la misuro davvero, col font della colonna, invece di
-     indovinare un valore in rem. Cinque "M" sono il caso peggiore, così cinque lettere ci stanno sempre. */
-  const scroller = document.querySelector(".scroller");
+  /* Al JS della striscia resta una sola misura, la larghezza della colonna: è fluida (40%) e il CSS
+     non sa leggerla, perché le percentuali di `left` si risolvono sul contenitore e non sulla cella.
+     Tutto il resto, scorrimento compreso, è CSS. */
   const titleTh = document.querySelector('th[data-k="title"]');
-  let strip = 0;
-  function measureStrip() {
-    const cell = document.querySelector("#rows td.title a") ?? titleTh;
-    const probe = document.createElement("span");
-    probe.textContent = "MMMMM";
-    probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre";
-    cell.append(probe);
-    strip = probe.getBoundingClientRect().width + parseFloat(getComputedStyle(titleTh).paddingLeft) * 2;
-    probe.remove();
-  }
-  function syncTitle() {
-    const hidden = Math.max(0, titleTh.getBoundingClientRect().width - strip);
-    const shift = Math.min(hidden, Math.max(0, scroller.scrollLeft));
-    const root = document.documentElement.style;
-    root.setProperty("--title-hidden", `${hidden}px`);
-    root.setProperty("--title-shift", `${shift}px`);
-    document.querySelector("table").classList.toggle("stuck", shift > 0);
-  }
-  scroller.addEventListener("scroll", syncTitle, { passive: true });
-  addEventListener("resize", () => { measureStrip(); syncTitle(); });
+  const syncTitle = () => document.documentElement.style.setProperty("--title-w", `${titleTh.getBoundingClientRect().width}px`);
+  addEventListener("resize", syncTitle);
 
   for (const th of ths) th.onclick = () => { cycle(keyOf(th)); render(); };
   $("sortBtn").onclick = (e) => {
