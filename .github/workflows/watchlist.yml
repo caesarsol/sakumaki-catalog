@@ -4,7 +4,7 @@ name: watchlist
 # di ripubblicare la pagina. La tabella non si costruisce qui.
 on:
   schedule:
-    - cron: "0 5 * * *" # 07:00 Europe/Rome in estate, 06:00 in inverno
+    - cron: "0 2 * * 0-5" # 04:00 Europe/Rome in estate, 03:00 in inverno; non il sabato, che è il giorno di catalog.yml e ci pensa lui a lanciare questo a fine run
   workflow_dispatch:
 
 permissions:

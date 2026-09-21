@@ -2,7 +2,7 @@ name: catalog
 
 on:
   schedule:
-    - cron: "0 2 * * 6" # notte fra venerdì e sabato, 04:00 Europe/Rome in estate, 03:00 in inverno
+    - cron: "0 2 * * 6" # sabato, stessa ora di watchlist.yml: 04:00 Europe/Rome in estate, 03:00 in inverno
   workflow_dispatch:
 
 permissions:
