@@ -51,12 +51,20 @@
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
   th, td { padding: 6px 5px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
   th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
-  /* Colonna del titolo congelata a sinistra: scorrendo fino alle bandiere si continua a vedere di che riga si tratta.
-     Serve uno sfondo opaco, o il resto della riga le passa sotto, e uno z-index sopra le altre celle. */
-  td.title, th[data-k="title"] { position: sticky; left: 0; background: var(--bg); }
-  td.title { z-index: 1; box-shadow: 1px 0 0 var(--line); }
-  th[data-k="title"] { z-index: 2; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); } /* sticky in alto e a sinistra: sopra tutti, e si tiene anche il bordo inferiore dell'intestazione */
-  td.title { min-width: 16rem; max-width: 0; width: 26%; padding-right: 8px; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
+  td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
+  /* Titolo a tutta larghezza finché non si scorre; scorrendo, della colonna resta solo una striscia
+     larga cinque lettere, ancorata a sinistra, per capire su che riga si è.
+     Come: la cella è sticky con un offset negativo pari alla parte da nascondere, così si ferma
+     quando di lei resta visibile solo la striscia; il contenuto viene spinto a destra della stessa
+     quantità (--title-shift), così a restare nella striscia è l'inizio del titolo e non la sua coda.
+     Il contenuto si sposta con una transform e non con un sticky suo perché l'overflow: hidden della
+     cella lo renderebbe il suo contenitore di scorrimento, e non si muoverebbe più. */
+  td.title, th[data-k="title"] { position: sticky; left: calc(-1 * var(--title-hidden, 0px)); overflow: hidden; background: var(--bg); }
+  td.title { z-index: 1; }
+  th[data-k="title"] { z-index: 2; box-shadow: 0 1px 0 var(--line); } /* sticky in alto e a sinistra insieme: deve stare sopra entrambe le file */
+  td.title > *, th[data-k="title"] > * { transform: translateX(var(--title-shift, 0px)); display: block; } /* display: block perché sugli inline la transform non si applica */
+  .stuck td.title, .stuck th[data-k="title"] { box-shadow: inset -1px 0 0 var(--line); } /* il bordo della striscia compare solo quando serve */
+  .stuck th[data-k="title"] { box-shadow: inset -1px 0 0 var(--line), 0 1px 0 var(--line); }
   td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
@@ -66,7 +74,7 @@
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
   th.flag, td.flag { text-align: center; }
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
-  th[data-k="in_watchlist"], td.mine.start { border-left: 1px solid var(--line); padding-left: 8px; } /* stacca il blocco personale dalle bandiere */
+  th[data-k="wl_rank"], td.mine.start { border-left: 1px solid var(--line); padding-left: 8px; } /* stacca il blocco personale dalle bandiere */
   .genres { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; }
   .bar span { border-radius: 1px; min-width: 0; }
@@ -102,6 +110,22 @@
   #sortPanel select { flex: 1; font: inherit; font-size: .85em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
   #sortPanel .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
   .sortable-ghost { opacity: .4; }
+
+  /* Mobile: è lo schermo che conta di più. Campi in colonna a tutta larghezza — altrimenti la
+     ricerca e i multi-select finiscono larghi diversi — e pannello ancorato in basso allo schermo,
+     perché ancorato al bottone uscirebbe di lato. */
+  @media (max-width: 640px) {
+    header { padding: 12px 12px 10px; }
+    .scroller { padding: 0 12px 16px; }
+    h1 { margin-bottom: 12px; }
+    .filters { gap: 8px; }
+    .filters > input[type=text], .ts-wrapper, .group, .seg, .sortbox, .sortbox > button { width: 100%; }
+    .group input { flex: 1; width: auto; }
+    .seg label { flex: 1; }
+    .seg span { width: 100%; justify-content: center; }
+    #count { margin-left: 0; }
+    #sortPanel { position: fixed; inset: auto 8px 8px; width: auto; max-width: none; }
+  }
 </style>
 </head>
 <body>
@@ -134,7 +158,7 @@
 <div class="scroller">
 <table>
   <thead><tr>
-    <th data-k="title">Titolo</th>
+    <th data-k="title"><span>Titolo</span></th>
     <th data-k="weighted" data-num title="media bayesiana: (v·voto + m·media catalogo)/(v+m), m regolabile nei filtri">V Bayes</th>
     <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
@@ -144,7 +168,7 @@
     <th data-k="seasons" data-num>Stagioni</th>
     <th data-k="episodes" data-num>Episodi</th>
     <!-- le colonne dei paesi vengono inserite qui, prima del blocco personale che chiude la tabella -->
-    <th data-k="in_watchlist" data-num title="★ preferita, ✓ in watchlist">Watchlist</th>
+    <th data-k="wl_rank" data-num title="★ preferita, ✓ in watchlist; ordinando vengono prima le preferite, poi il resto della watchlist">Watchlist</th>
     <th data-k="wl_episode" data-num title="la puntata a cui sei arrivato secondo la watchlist: non è quante ne hai viste, è dove riprende; ✓ quando quella puntata l'hai finita">Puntata</th>
   </tr></thead>
   <tbody id="rows"></tbody>
@@ -158,7 +182,7 @@
   const $ = (id) => document.getElementById(id);
   const countries = __COUNTRIES__;
   const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-  const firstOwnTh = document.querySelector('th[data-k="in_watchlist"]'); // il blocco personale chiude la tabella: le bandiere vanno prima
+  const firstOwnTh = document.querySelector('th[data-k="wl_rank"]'); // il blocco personale chiude la tabella: le bandiere vanno prima
   for (const c of countries) {
     const th = document.createElement("th");
     th.className = "flag"; th.dataset.k = `c:${c.iso2}`; th.dataset.num = ""; th.dataset.label = `${flag(c.iso2)} ${c.iso2}`;
@@ -223,7 +247,7 @@
 
   /* ---- ordinamento multiplo ----------------------------------------------------------------
      `sorts` è la pila di criteri in ordine di priorità, condivisa da intestazioni e pannello. */
-  let sorts = [{ k: "weighted", desc: true }];
+  let sorts = [{ k: "rating", desc: true }];
   const value = (r, k) =>
     k.startsWith("c:") ? r.countries.includes(k.slice(2)) :
     k.startsWith("s:") ? r.stars[Number(k.slice(2)) - 1].pct :
@@ -294,7 +318,34 @@
     </tr>`).join("");
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
     renderSort();
+    if (!strip) measureStrip(); // il font si misura sulla prima riga disegnata
+    syncTitle(); // la larghezza della colonna dipende da cosa è visibile
   }
+
+  /* La striscia è larga cinque lettere: la misuro davvero, col font della colonna, invece di
+     indovinare un valore in rem. Cinque "M" sono il caso peggiore, così cinque lettere ci stanno sempre. */
+  const scroller = document.querySelector(".scroller");
+  const titleTh = document.querySelector('th[data-k="title"]');
+  let strip = 0;
+  function measureStrip() {
+    const cell = document.querySelector("#rows td.title a") ?? titleTh;
+    const probe = document.createElement("span");
+    probe.textContent = "MMMMM";
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre";
+    cell.append(probe);
+    strip = probe.getBoundingClientRect().width + parseFloat(getComputedStyle(titleTh).paddingLeft) * 2;
+    probe.remove();
+  }
+  function syncTitle() {
+    const hidden = Math.max(0, titleTh.getBoundingClientRect().width - strip);
+    const shift = Math.min(hidden, Math.max(0, scroller.scrollLeft));
+    const root = document.documentElement.style;
+    root.setProperty("--title-hidden", `${hidden}px`);
+    root.setProperty("--title-shift", `${shift}px`);
+    document.querySelector("table").classList.toggle("stuck", shift > 0);
+  }
+  scroller.addEventListener("scroll", syncTitle, { passive: true });
+  addEventListener("resize", () => { measureStrip(); syncTitle(); });
 
   for (const th of ths) th.onclick = () => { cycle(keyOf(th)); render(); };
   $("sortBtn").onclick = (e) => {
