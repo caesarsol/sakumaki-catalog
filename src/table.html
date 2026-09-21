@@ -6,78 +6,110 @@
 <title>サク巻き · __SUBTITLE__</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.css">
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; --bg: #f2f2f0; --panel: #fff; --line: #8884; --in: #1a7f37; --out: #c0392b; }
-  :root { --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; } /* rampa ordinale blu, validata (dataviz) */
-  @media (prefers-color-scheme: dark) { :root { --s1: #9ec5f4; --s2: #6da7ec; --s3: #3987e5; --s4: #256abf; --s5: #184f95; --bg: #1c1c1c; --panel: #262626; --in: #4ec26f; --out: #ef6f5e; } }
+  :root {
+    color-scheme: light; /* solo chiaro: senza, i controlli nativi seguono il tema di sistema e sul tema scuro finiscono scuri su chiaro */
+    font-family: system-ui, sans-serif;
+    --bg: #f4f2ef; --panel: #fff; --fg: #1d1a17; --muted: #6d665e; --line: #dcd6ce;
+    --accent: #a4500c; --accent-weak: #a4500c1a; /* arancio scuro */
+    --in: #1a7f37; --out: #c0392b; /* incluso / escluso nei filtri a tre stati */
+    --h: 30px; /* altezza comune dei controlli nella barra dei filtri */
+    --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; /* rampa ordinale blu, validata (dataviz) */
+  }
   /* Layout a colonna a tutta altezza: titolo e filtri fissi, solo .scroller scorre (in entrambe le direzioni); l'intestazione della tabella è sticky dentro di esso. */
   html, body { height: 100%; }
-  body { margin: 0; display: flex; flex-direction: column; background: var(--bg); }
+  body { margin: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); }
   header { padding: 16px 24px 12px; }
   .scroller { flex: 1; min-height: 0; overflow: auto; padding: 0 24px 24px; }
   h1 { font-size: clamp(2rem, 8vw, 3.2rem); margin: 0 0 16px; }
-  h1 .sub { font-weight: normal; opacity: .7; margin-left: 12px; }
-  .filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; font-size: .9rem; }
-  .filters label { display: inline-flex; align-items: center; gap: 6px; } /* senza, l'etichetta di un multi-select finisce sopra il campo */
-  .filters input[type=text] { width: 16rem; }
-  .filters input[type=number] { width: 5rem; }
+  h1 .mark { color: var(--accent); }
+  h1 .sub { font-weight: normal; color: var(--muted); margin-left: 12px; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* Filtri: una riga di campi della stessa altezza, ciascuno con l'etichetta a sinistra. */
+  .filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: .9rem; }
+  .field { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+  .filters input[type=text], .filters input[type=number], .sortbox > button, .seg span {
+    height: var(--h); box-sizing: border-box; padding: 0 8px; font: inherit; font-size: .9rem;
+    color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  }
+  .filters input[type=text] { width: 15rem; }
+  .filters input[type=number] { width: 5.5rem; }
+  #count { color: var(--muted); margin-left: auto; }
+
+  /* Watchlist: i tre stati si escludono a vicenda, quindi un segmentato al posto di due caselle indipendenti. */
+  .seg { display: inline-flex; }
+  .seg input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .seg span { display: inline-flex; align-items: center; cursor: pointer; border-radius: 0; margin-left: -1px; }
+  .seg label:first-of-type span { border-radius: 6px 0 0 6px; margin-left: 0; }
+  .seg label:last-of-type span { border-radius: 0 6px 6px 0; }
+  .seg input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
   th, td { padding: 6px 5px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
   th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
   td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
   td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
-  th.sorted::after { content: "\00a0▲" attr(data-ord); opacity: .7; } /* data-ord: posizione nella pila di ordinamento, vuota quando il criterio è uno solo */
+  th.sorted { color: var(--accent); }
+  th.sorted::after { content: "\00a0▲" attr(data-ord); } /* data-ord: posizione nella pila di ordinamento, vuota quando il criterio è uno solo */
   th.sorted.desc::after { content: "\00a0▼" attr(data-ord); }
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
   th.flag, td.flag { text-align: center; }
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
-  .genres { opacity: .8; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .genres { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; }
   .bar span { border-radius: 1px; min-width: 0; }
   .legend { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
   .legend i { width: 10px; height: 10px; border-radius: 1px; display: inline-block; }
-  #count { opacity: .7; margin-left: auto; }
 
   /* Tom Select: chip a tre stati (assente → incluso → escluso), il clic sul chip inverte il segno, la ✕ lo toglie. */
   .ts-wrapper { width: 17rem; font-size: .9rem; } /* larghezza fissa: i chip vanno a capo dentro il campo invece di allargare la barra */
-  .ts-wrapper.multi .ts-control { background: var(--panel); border-color: var(--line); padding: 2px 4px; }
-  .ts-dropdown, .ts-control, .ts-control input { color: inherit; }
-  .ts-dropdown { background: var(--panel); border-color: var(--line); }
-  .ts-dropdown .active { background: color-mix(in srgb, currentColor 12%, transparent); color: inherit; } /* il grigio scuro di Tom Select sparisce sul tema scuro */
+  .ts-wrapper.multi .ts-control { min-height: var(--h); padding: 2px 4px; background: var(--panel); border-color: var(--line); border-radius: 6px; }
+  .ts-wrapper.multi.focus .ts-control { border-color: var(--accent); box-shadow: none; }
+  .ts-dropdown { border-color: var(--line); border-radius: 6px; }
+  .ts-dropdown .active { background: var(--accent-weak); color: var(--fg); }
   .ts-wrapper.multi .ts-control > .item { cursor: pointer; border-radius: 4px; border: 1px solid; padding: 1px 6px; }
-  .ts-wrapper.multi .ts-control > .item.in { color: var(--in); border-color: color-mix(in srgb, var(--in) 50%, transparent); background: color-mix(in srgb, var(--in) 12%, transparent); }
-  .ts-wrapper.multi .ts-control > .item.out { color: var(--out); border-color: color-mix(in srgb, var(--out) 50%, transparent); background: color-mix(in srgb, var(--out) 12%, transparent); text-decoration: line-through; }
+  .ts-wrapper.multi .ts-control > .item.in { color: var(--in); border-color: color-mix(in srgb, var(--in) 50%, transparent); background: color-mix(in srgb, var(--in) 10%, transparent); }
+  .ts-wrapper.multi .ts-control > .item.out { color: var(--out); border-color: color-mix(in srgb, var(--out) 50%, transparent); background: color-mix(in srgb, var(--out) 10%, transparent); text-decoration: line-through; }
   .ts-wrapper.multi .ts-control > .item.in::before { content: "＋ "; text-decoration: none; }
   .ts-wrapper.multi .ts-control > .item.out::before { content: "− "; text-decoration: none; }
   .ts-wrapper.multi .ts-control > .item .remove { border-left-color: currentColor; opacity: .6; }
 
   /* Pannello di ordinamento multiplo */
   .sortbox { position: relative; }
-  .sortbox > button { font: inherit; cursor: pointer; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; }
-  #sortPanel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 22rem; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0003; }
+  .sortbox > button { cursor: pointer; }
+  .sortbox > button.on { border-color: var(--accent); color: var(--accent); }
+  #sortPanel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 22rem; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0000001f; }
   #sortPanel[hidden] { display: none; }
   #sortList { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-  #sortList li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: color-mix(in srgb, currentColor 5%, transparent); }
-  #sortList li.empty { justify-content: center; opacity: .6; border-style: dashed; }
-  #sortList .grip { cursor: grab; opacity: .5; }
+  #sortList li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg); }
+  #sortList li.empty { justify-content: center; color: var(--muted); border: 1px dashed var(--line); }
+  #sortList .grip { cursor: grab; color: var(--muted); }
   #sortList .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #sortList button { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: inherit; padding: 1px 6px; }
+  #sortList button, #sortClear { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--fg); padding: 2px 7px; }
   #sortPanel .row { display: flex; gap: 6px; }
-  #sortPanel select { flex: 1; font: inherit; font-size: .9em; background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
-  #sortPanel .hint { margin: 8px 0 0; font-size: .78rem; opacity: .65; line-height: 1.35; }
+  #sortPanel select { flex: 1; font: inherit; font-size: .85em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
+  #sortPanel .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
   .sortable-ghost { opacity: .4; }
 </style>
 </head>
 <body>
 <header>
-<h1><span title="sakumaki">サク巻き</span> <span class="sub">__SUBTITLE__</span></h1>
+<h1><span class="mark" title="sakumaki">サク巻き</span> <span class="sub">__SUBTITLE__</span></h1>
 <div class="filters">
   <input id="q" type="text" placeholder="Cerca nel titolo…">
-  <label>Paesi <select id="fCountries" multiple placeholder="tutti"></select></label>
-  <label>Generi <select id="fGenres" multiple placeholder="tutti"></select></label>
-  <label title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></label>
-  <label><input id="onlyWatchlist" type="checkbox"> solo in watchlist</label>
-  <label><input id="hideWatchlist" type="checkbox"> non in watchlist</label>
+  <label class="field">Paesi <select id="fCountries" multiple placeholder="tutti"></select></label>
+  <label class="field">Generi <select id="fGenres" multiple placeholder="tutti"></select></label>
+  <span class="field" role="radiogroup" aria-label="Watchlist">Watchlist
+    <span class="seg">
+      <label><input type="radio" name="wl" value="" checked><span title="tutte le serie">tutte</span></label>
+      <label><input type="radio" name="wl" value="in"><span title="solo le serie in watchlist">dentro</span></label>
+      <label><input type="radio" name="wl" value="out"><span title="solo le serie fuori dalla watchlist">fuori</span></label>
+    </span>
+  </span>
+  <label class="field" title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></label>
   <div class="sortbox">
     <button id="sortBtn" type="button" aria-expanded="false">Ordinamento <span id="sortCount"></span></button>
     <div id="sortPanel" hidden>
@@ -167,6 +199,7 @@
   }
   const fCountries = triFilter($("fCountries"), countries.map((c) => ({ value: c.iso2, text: `${flag(c.iso2)} ${c.iso2}` })), "tutti i paesi");
   const fGenres = triFilter($("fGenres"), [...new Set(rows.flatMap((r) => r.genres))].sort().map((g) => ({ value: g, text: g })), "tutti i generi");
+  const watchlist = () => document.querySelector("input[name=wl]:checked").value; // "" | "in" | "out"
 
   /* ---- ordinamento multiplo ----------------------------------------------------------------
      `sorts` è la pila di criteri in ordine di priorità, condivisa da intestazioni e pannello. */
@@ -190,6 +223,7 @@
   }
   function renderSort() {
     $("sortCount").textContent = sorts.length ? `(${sorts.length})` : "";
+    $("sortBtn").classList.toggle("on", sorts.length > 0);
     $("sortList").innerHTML = sorts.length
       ? sorts.map((s) => `<li data-k="${esc(s.k)}"><span class="grip" title="trascina per cambiare priorità">⠿</span><span class="lbl">${esc(labelOf(s.k))}</span><button data-act="dir" title="inverti il verso">${s.desc ? "▼ desc" : "▲ asc"}</button><button data-act="rm" title="togli">✕</button></li>`).join("")
       : `<li class="empty">nessun criterio</li>`;
@@ -208,7 +242,7 @@
   function render() {
     if (!ready) return;
     const q = $("q").value.trim().toLowerCase();
-    const only = $("onlyWatchlist").checked, hide = $("hideWatchlist").checked;
+    const wl = watchlist();
     const cIn = fCountries.in, cOut = fCountries.out, gIn = fGenres.in, gOut = fGenres.out;
     const m = Number($("m").value) || 0, C = __C__; // media del catalogo intero, calcolata da table.ts
     for (const r of rows) r.weighted = (r.votes * r.rating + m * C) / (r.votes + m);
@@ -216,7 +250,7 @@
       (!q || r.title.toLowerCase().includes(q)) &&
       cIn.every((c) => r.countries.includes(c)) && !cOut.some((c) => r.countries.includes(c)) &&
       gIn.every((g) => r.genres.includes(g)) && !gOut.some((g) => r.genres.includes(g)) &&
-      (!only || r.in_watchlist) && (!hide || !r.in_watchlist));
+      (wl !== "in" || r.in_watchlist) && (wl !== "out" || !r.in_watchlist));
     visible.sort(compare);
     $("rows").innerHTML = visible.map((r) => `<tr>
       <td class="title"><a href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a><div class="genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></td>
@@ -263,7 +297,8 @@
     render();
   } });
 
-  for (const id of ["q", "m", "onlyWatchlist", "hideWatchlist"]) $(id).oninput = render;
+  for (const id of ["q", "m"]) $(id).oninput = render;
+  for (const radio of document.querySelectorAll("input[name=wl]")) radio.onchange = render;
   ready = true;
   render();
 </script>
