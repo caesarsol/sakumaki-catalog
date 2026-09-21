@@ -1,5 +1,7 @@
 name: watchlist
 
+# Solo dati: scarica la watchlist dell'account e la lascia come artifact, poi chiede a deploy.yml
+# di ripubblicare la pagina. La tabella non si costruisce qui.
 on:
   schedule:
     - cron: "0 5 * * *" # 07:00 Europe/Rome in estate, 06:00 in inverno
@@ -7,42 +9,26 @@ on:
 
 permissions:
   contents: read
-  actions: read # per scaricare l'artifact dell'ultimo run di catalog.yml
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
+  actions: write # per lanciare deploy.yml a fine run
 
 jobs:
-  build:
+  watchlist:
     runs-on: ubuntu-latest
     env:
       AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
       API_BASE: ${{ secrets.API_BASE }} # gli host sono secret, non variabili: nei log pubblici vengono mascherati
-      SITE_BASE: ${{ secrets.SITE_BASE }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data # catalogo dell'ultimo run settimanale riuscito
+      - run: bun run watchlist
+      - run: bun run watchlist-ids
+      - run: bun run watchlist-votes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: watchlist
+          path: data/watchlist-ids.json # solo gli id: gli artifact di un repo pubblico sono pubblici, e watchlist.json contiene anche playhead e preferiti
+          retention-days: 30
+      - run: gh workflow run deploy.yml # ripubblica la pagina con la watchlist di stamattina
         env:
           GH_TOKEN: ${{ github.token }}
-      - run: bun run watchlist
-      - run: bun run watchlist-votes
-      - run: bun run table
-      - run: mkdir -p site && cp data/index.html site/index.html
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

@@ -17,9 +17,12 @@ const readNdjson = async <T>(path: string): Promise<T[]> =>
 
 const catalog = await readNdjson<SeriesObject & { countries: string[] }>(`${dataDir}/catalog.ndjson`);
 const countries = COUNTRIES.filter((c) => catalog.some((s) => s.countries.includes(c.iso2))); // solo i paesi presenti nei dati: un download fallito non lascia una colonna vuota
-const watchlistFile = Bun.file(`${dataDir}/watchlist.json`);
 const inWatchlist = new Set<string>();
-if (await watchlistFile.exists()) {
+const idsFile = Bun.file(`${dataDir}/watchlist-ids.json`); // in CI arriva solo questo elenco di id (vedi watchlist-ids.ts)
+const watchlistFile = Bun.file(`${dataDir}/watchlist.json`); // in locale di solito c'è la watchlist intera
+if (await idsFile.exists()) {
+  for (const id of (await idsFile.json()) as string[]) inWatchlist.add(id);
+} else if (await watchlistFile.exists()) {
   const { data }: { data: WatchlistItem[] } = await watchlistFile.json();
   for (const w of data) if (w.panel.episode_metadata) inWatchlist.add(w.panel.episode_metadata.series_id);
 }

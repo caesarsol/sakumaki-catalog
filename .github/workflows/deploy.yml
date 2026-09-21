@@ -1,0 +1,56 @@
+name: deploy
+
+# Solo pubblicazione: la pagina è un file unico generato da src/ più i dati raccolti dagli altri
+# due workflow, quindi qui non si chiama nessuna API. Parte al push del codice su main, a fine
+# watchlist quando cambiano i dati, o a mano.
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - package.json
+      - bun.lock
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # per scaricare gli artifact di catalog.yml e watchlist.yml
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SITE_BASE: ${{ secrets.SITE_BASE }} # l'host è secret, non variabile: nei log pubblici viene mascherato
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data # catalogo dell'ultimo run settimanale riuscito
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: gh run download "$(gh run list --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name watchlist --dir data # id della watchlist dell'ultimo run riuscito
+        continue-on-error: true # se manca, la pagina esce lo stesso, solo con la colonna Watchlist vuota
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: bun run table
+      - run: mkdir -p site && cp data/index.html site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
