@@ -26,18 +26,20 @@
   a { color: var(--accent); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  /* Filtri: una riga di campi della stessa altezza, ciascuno con l'etichetta a sinistra. */
-  .filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: .9rem; }
-  .field { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-  .filters input[type=text], .filters input[type=number], .sortbox > button, .seg span {
+  /* Filtri: una riga di campi della stessa altezza, senza etichette esterne — ognuno si presenta da sé
+     (segnaposto per i campi vuoti, prefisso interno dove un valore c'è sempre, testo sui segmenti). */
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: .9rem; }
+  .filters > input[type=text], .group, .sortbox > button, .seg span {
     height: var(--h); box-sizing: border-box; padding: 0 8px; font: inherit; font-size: .9rem;
     color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   }
-  .filters input[type=text] { width: 15rem; }
-  .filters input[type=number] { width: 5.5rem; }
+  .filters > input[type=text] { width: 15rem; }
+  .group { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); } /* un input numerico con un valore non mostra mai il segnaposto: serve un prefisso stabile */
+  .group input { width: 4.5rem; height: 100%; padding: 0; border: 0; background: none; font: inherit; font-size: .9rem; color: var(--fg); }
   #count { color: var(--muted); margin-left: auto; }
 
-  /* Watchlist: i tre stati si escludono a vicenda, quindi un segmentato al posto di due caselle indipendenti. */
+  /* Watchlist: i tre stati si escludono a vicenda, quindi un segmentato al posto di due caselle indipendenti;
+     i segmenti si nominano da soli, così non serve un'etichetta esterna. */
   .seg { display: inline-flex; }
   .seg input { position: absolute; opacity: 0; width: 0; height: 0; }
   .seg span { display: inline-flex; align-items: center; cursor: pointer; border-radius: 0; margin-left: -1px; }
@@ -53,6 +55,7 @@
   td.title a { display: block; font-size: .95em; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
+  th .star { color: var(--accent); font-size: .85em; } /* quale stella sta ordinando, quando non è la 5★ */
   th.sorted::after { content: "\00a0▲" attr(data-ord); } /* data-ord: posizione nella pila di ordinamento, vuota quando il criterio è uno solo */
   th.sorted.desc::after { content: "\00a0▼" attr(data-ord); }
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
@@ -81,7 +84,7 @@
   .sortbox { position: relative; }
   .sortbox > button { cursor: pointer; }
   .sortbox > button.on { border-color: var(--accent); color: var(--accent); }
-  #sortPanel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 22rem; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0000001f; }
+  #sortPanel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; width: 22rem; max-width: calc(100vw - 48px); padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0000001f; }
   #sortPanel[hidden] { display: none; }
   #sortList { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   #sortList li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg); }
@@ -100,16 +103,14 @@
 <h1><span class="mark" title="sakumaki">サク巻き</span> <span class="sub">__SUBTITLE__</span></h1>
 <div class="filters">
   <input id="q" type="text" placeholder="Cerca nel titolo…">
-  <label class="field">Paesi <select id="fCountries" multiple placeholder="tutti"></select></label>
-  <label class="field">Generi <select id="fGenres" multiple placeholder="tutti"></select></label>
-  <span class="field" role="radiogroup" aria-label="Watchlist">Watchlist
-    <span class="seg">
-      <label><input type="radio" name="wl" value="" checked><span title="tutte le serie">tutte</span></label>
-      <label><input type="radio" name="wl" value="in"><span title="solo le serie in watchlist">dentro</span></label>
-      <label><input type="radio" name="wl" value="out"><span title="solo le serie fuori dalla watchlist">fuori</span></label>
-    </span>
+  <select id="fCountries" multiple></select>
+  <select id="fGenres" multiple></select>
+  <span class="seg" role="radiogroup" aria-label="Watchlist">
+    <label><input type="radio" name="wl" value="" checked><span title="tutte le serie, in watchlist o no">Tutte</span></label>
+    <label><input type="radio" name="wl" value="in"><span title="solo le serie in watchlist">In watchlist</span></label>
+    <label><input type="radio" name="wl" value="out"><span title="solo le serie fuori dalla watchlist">Fuori</span></label>
   </span>
-  <label class="field" title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></label>
+  <span class="group" title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
   <div class="sortbox">
     <button id="sortBtn" type="button" aria-expanded="false">Ordinamento <span id="sortCount"></span></button>
     <div id="sortPanel" hidden>
@@ -132,7 +133,7 @@
     <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
     <th data-k="votes" data-num>Votanti</th>
-    <th data-k="five" data-num data-label="Distribuzione" title="1★→5★ chiaro→scuro; larghezze ∝ √quota per rendere leggibile la coda; ordina per quota di 5★">Distribuzione <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
+    <th data-k="s:5" data-num title="1★→5★ chiaro→scuro; larghezze ∝ √quota per rendere leggibile la coda; il clic ordina per quota di 5★, le altre stelle stanno nel pannello dell'ordinamento">Distribuzione<span class="star"></span> <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num>Stagioni</th>
     <th data-k="episodes" data-num>Episodi</th>
@@ -156,8 +157,13 @@
     document.querySelector("thead tr").append(th);
   }
   const ths = [...document.querySelectorAll("thead th")];
-  const columns = ths.map((th) => ({ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }));
+  // La distribuzione è una colonna sola ma cinque criteri: `s:5` … `s:1`, la quota di ciascuna stella.
+  const columns = ths.flatMap((th) => th.dataset.k === "s:5"
+    ? [5, 4, 3, 2, 1].map((n) => ({ k: `s:${n}`, label: `Distribuzione ${n}★`, num: true }))
+    : [{ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }]);
   const labelOf = (k) => columns.find((c) => c.k === k)?.label ?? k;
+  /** Il clic sulla colonna della distribuzione agisce sulla stella già in pila, altrimenti sulla 5★. */
+  const keyOf = (th) => (th.dataset.k === "s:5" ? sorts.find((s) => s.k.startsWith("s:"))?.k ?? "s:5" : th.dataset.k);
 
   const fmt = new Intl.NumberFormat("it-IT");
   const yes = (b) => (b ? "✓" : "");
@@ -166,7 +172,7 @@
   /* ---- filtri multi-selezione a tre stati -------------------------------------------------
      Un valore è assente (nessun vincolo), incluso o escluso; la ✕ del chip lo riporta assente.
      Inclusi in AND, esclusi in AND: "presenti in IT ma non in US" = +IT −US. */
-  function triFilter(select, options, placeholder) {
+  function triFilter(select, options, placeholder, title) {
     const modes = new Map(); // value -> "in" | "out"; l'assenza dai chip è il terzo stato
     const ts = new TomSelect(select, {
       options, placeholder, maxItems: null, hideSelected: true, closeAfterSelect: false,
@@ -192,19 +198,23 @@
       render();
     };
     for (const type of ["mousedown", "click"]) ts.control.addEventListener(type, onChip, true);
+    ts.wrapper.title = title; // senza etichetta esterna, e col segnaposto che sparisce a chip presenti, resta il suggerimento
     return {
       get in() { return ts.items.filter((v) => modes.get(v) !== "out"); },
       get out() { return ts.items.filter((v) => modes.get(v) === "out"); },
     };
   }
-  const fCountries = triFilter($("fCountries"), countries.map((c) => ({ value: c.iso2, text: `${flag(c.iso2)} ${c.iso2}` })), "tutti i paesi");
-  const fGenres = triFilter($("fGenres"), [...new Set(rows.flatMap((r) => r.genres))].sort().map((g) => ({ value: g, text: g })), "tutti i generi");
+  const fCountries = triFilter($("fCountries"), countries.map((c) => ({ value: c.iso2, text: `${flag(c.iso2)} ${c.iso2}` })), "Tutti i paesi", "Filtra per paese: ＋ presente, − assente");
+  const fGenres = triFilter($("fGenres"), [...new Set(rows.flatMap((r) => r.genres))].sort().map((g) => ({ value: g, text: g })), "Tutti i generi", "Filtra per genere: ＋ presente, − assente");
   const watchlist = () => document.querySelector("input[name=wl]:checked").value; // "" | "in" | "out"
 
   /* ---- ordinamento multiplo ----------------------------------------------------------------
      `sorts` è la pila di criteri in ordine di priorità, condivisa da intestazioni e pannello. */
   let sorts = [{ k: "weighted", desc: true }];
-  const value = (r, k) => (k.startsWith("c:") ? r.countries.includes(k.slice(2)) : r[k] ?? "");
+  const value = (r, k) =>
+    k.startsWith("c:") ? r.countries.includes(k.slice(2)) :
+    k.startsWith("s:") ? r.stars[Number(k.slice(2)) - 1].pct :
+    r[k] ?? "";
   const compare = (a, b) => {
     for (const { k, desc } of sorts) {
       const x = value(a, k), y = value(b, k);
@@ -231,10 +241,13 @@
       columns.filter((c) => !sorts.some((s) => s.k === c.k)).map((c) => `<option value="${esc(c.k)}">${esc(c.label)}</option>`).join("");
     const ord = "¹²³⁴⁵⁶⁷⁸⁹";
     for (const th of ths) {
-      const i = sorts.findIndex((s) => s.k === th.dataset.k);
+      const k = keyOf(th);
+      const i = sorts.findIndex((s) => s.k === k);
       th.classList.toggle("sorted", i >= 0);
       th.classList.toggle("desc", i >= 0 && sorts[i].desc);
       th.dataset.ord = i >= 0 && sorts.length > 1 ? ord[i] ?? "" : "";
+      const star = th.querySelector(".star");
+      if (star) star.textContent = k === "s:5" ? "" : ` ${k.slice(2)}★`;
     }
   }
 
@@ -269,7 +282,7 @@
     renderSort();
   }
 
-  for (const th of ths) th.onclick = () => { cycle(th.dataset.k); render(); };
+  for (const th of ths) th.onclick = () => { cycle(keyOf(th)); render(); };
   $("sortBtn").onclick = (e) => {
     e.stopPropagation();
     const open = $("sortPanel").hidden;

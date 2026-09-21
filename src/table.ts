@@ -76,7 +76,6 @@ const rows = top.map((s) => ({
   rating: s.rating_fine,
   lcb: s.rating_lcb,
   votes: s.rating.total,
-  five: s.rating["5s"].percentage,
   stars: ([1, 2, 3, 4, 5] as const).map((k) => ({ pct: s.rating[`${k}s`].percentage, shown: s.rating[`${k}s`].displayed + s.rating[`${k}s`].unit })),
   year: s.series_metadata.series_launch_year,
   seasons: s.series_metadata.season_count,
