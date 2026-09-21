@@ -13,7 +13,8 @@
     --accent: #a4500c; --accent-weak: #a4500c1a; /* arancio scuro */
     --in: #1a7f37; --out: #c0392b; /* incluso / escluso nei filtri a tre stati */
     --h: 30px; /* altezza comune dei controlli nella barra dei filtri */
-    --strip: 6ch; /* quanto del titolo resta visibile quando la tabella è scorsa: una manciata di lettere */
+    --title-w: 26rem; /* larghezza della colonna del titolo: fissa, così la striscia si calcola tutta in CSS */
+    --strip: 3rem; /* quanto del titolo resta visibile a tabella scorsa. In rem e non in ch: il ch dipende dal font della cella, e l'intestazione in grassetto si fermava più in là delle righe */
     --cell-pad: 5px; /* il padding orizzontale delle celle, che serve anche in calc() */
     --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; /* rampa ordinale blu, validata (dataviz) */
   }
@@ -53,7 +54,7 @@
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
   th, td { padding: 6px var(--cell-pad); border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
   th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
-  td.title { min-width: 22rem; max-width: 0; width: 40%; padding-right: 0; font-size: .95em; } /* max-width: 0 lascia che sia la tabella a fissare la larghezza, così l'ellissi funziona */
+  td.title { font-size: .95em; }
   /* Titolo a tutta larghezza finché non si scorre; scorrendo, della colonna resta solo una striscia
      di cinque lettere ancorata a sinistra, per capire su che riga si è. Due sticky annidati, senza
      un solo listener: la cella si ferma con un offset negativo pari alla parte da nascondere, e
@@ -66,11 +67,11 @@
        contenitore: se riempisse la cella non avrebbe spazio per scorrere;
      - il testo dentro l'involucro è più largo dell'involucro e trabocca: a tenerlo dentro la
        colonna ci pensa il clip-path della cella, e l'ellissi resta perché .full ha una larghezza sua. */
-  td.title, th[data-k="title"] { position: sticky; left: calc(var(--strip) + var(--cell-pad) - var(--title-w, 100vw)); clip-path: inset(0); background: var(--bg); box-shadow: inset -1px 0 0 var(--line); }
+  td.title, th[data-k="title"] { width: var(--title-w); min-width: var(--title-w); max-width: var(--title-w); padding-right: 0; position: sticky; left: calc(var(--strip) + var(--cell-pad) - var(--title-w)); clip-path: inset(0); background: var(--bg); box-shadow: inset -1px 0 0 var(--line); }
   td.title { z-index: 1; }
-  th[data-k="title"] { padding-right: 0; z-index: 2; box-shadow: inset -1px 0 0 var(--line), 0 1px 0 var(--line); } /* sticky in alto e a sinistra insieme: sopra entrambe le file, e si tiene il bordo dell'intestazione */
+  th[data-k="title"] { z-index: 2; box-shadow: inset -1px 0 0 var(--line), 0 1px 0 var(--line); } /* sticky in alto e a sinistra insieme: sopra entrambe le file, e si tiene il bordo dell'intestazione */
   .peek { position: sticky; left: var(--cell-pad); width: var(--strip); } /* left pari al padding della cella: il testo non sobbalza quando la colonna si ferma */
-  .full { display: block; width: calc(var(--title-w, 100vw) - var(--cell-pad)); overflow: hidden; text-overflow: ellipsis; }
+  .full { display: block; width: calc(var(--title-w) - var(--cell-pad)); overflow: hidden; text-overflow: ellipsis; }
   td.title a { text-decoration: none; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
@@ -121,6 +122,7 @@
      ricerca e i multi-select finiscono larghi diversi — e pannello ancorato in basso allo schermo,
      perché ancorato al bottone uscirebbe di lato. */
   @media (max-width: 640px) {
+    :root { --title-w: 22rem; } /* sul telefono la colonna resta quella di prima */
     header { padding: 12px 12px 10px; }
     .scroller { padding: 0 12px 16px; }
     h1 { margin-bottom: 12px; }
@@ -324,15 +326,7 @@
     </tr>`).join("");
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
     renderSort();
-    syncTitle(); // la larghezza della colonna dipende da cosa è visibile
   }
-
-  /* Al JS della striscia resta una sola misura, la larghezza della colonna: è fluida (40%) e il CSS
-     non sa leggerla, perché le percentuali di `left` si risolvono sul contenitore e non sulla cella.
-     Tutto il resto, scorrimento compreso, è CSS. */
-  const titleTh = document.querySelector('th[data-k="title"]');
-  const syncTitle = () => document.documentElement.style.setProperty("--title-w", `${titleTh.getBoundingClientRect().width}px`);
-  addEventListener("resize", syncTitle);
 
   for (const th of ths) th.onclick = () => { cycle(keyOf(th)); render(); };
   $("sortBtn").onclick = (e) => {
