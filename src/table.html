@@ -13,6 +13,7 @@
     --accent: #a4500c; --accent-weak: #a4500c1a; /* arancio scuro */
     --in: #1a7f37; --out: #c0392b; /* incluso / escluso nei filtri a tre stati */
     --h: 30px; /* altezza comune dei controlli nella barra dei filtri */
+    --pane-h: 5.5rem; /* i due pannelli sono alti uguale, così passare da uno all'altro non muove la tabella */
     --title-w: 26rem; /* larghezza della colonna del titolo: fissa, così la striscia si calcola tutta in CSS */
     --strip: 3rem; /* quanto del titolo resta visibile a tabella scorsa. In rem e non in ch: il ch dipende dal font della cella, e l'intestazione in grassetto si fermava più in là delle righe */
     --cell-pad: 5px; /* il padding orizzontale delle celle, che serve anche in calc() */
@@ -32,7 +33,7 @@
   /* Filtri: una riga di campi della stessa altezza, senza etichette esterne — ognuno si presenta da sé
      (segnaposto per i campi vuoti, prefisso interno dove un valore c'è sempre, testo sui segmenti). */
   .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: .9rem; }
-  .filters > input[type=text], .group, .sortbox > button, .seg span {
+  .filters > input[type=text], .group, .seg span {
     height: var(--h); box-sizing: border-box; padding: 0 8px; font: inherit; font-size: .9rem;
     color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   }
@@ -101,21 +102,24 @@
   .ts-wrapper.multi .ts-control > .item.out::before { content: "− "; text-decoration: none; }
   .ts-wrapper.multi .ts-control > .item .remove { border-left-color: currentColor; opacity: .6; }
 
-  /* Pannello di ordinamento multiplo */
-  .sortbox { position: relative; }
-  .sortbox > button { cursor: pointer; }
-  .sortbox > button.on { border-color: var(--accent); color: var(--accent); }
-  #sortPanel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; width: 22rem; max-width: calc(100vw - 48px); padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0000001f; }
-  #sortPanel[hidden] { display: none; }
+  /* Filtri e ordinamento sono due schede nello stesso spazio, della stessa altezza: l'ordinamento
+     non è più un pannello che si apre sopra la tabella, e passare da una scheda all'altra non
+     sposta niente. Quel che non ci sta scorre dentro la scheda. */
+  .tabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  .tab { font: inherit; font-size: .9rem; cursor: pointer; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); padding: 6px 10px; margin-bottom: -1px; }
+  .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .panes { height: var(--pane-h); overflow-y: auto; overflow-x: hidden; }
+  .panes > [hidden] { display: none; }
+  #paneOrdine { max-width: 26rem; }
   #sortList { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   #sortList li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg); }
   #sortList li.empty { justify-content: center; color: var(--muted); border: 1px dashed var(--line); }
   #sortList .grip { cursor: grab; color: var(--muted); }
   #sortList .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #sortList button, #sortClear { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--fg); padding: 2px 7px; }
-  #sortPanel .row { display: flex; gap: 6px; }
-  #sortPanel select { flex: 1; font: inherit; font-size: .85em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
-  #sortPanel .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
+  #paneOrdine .row { display: flex; gap: 6px; }
+  #paneOrdine select { flex: 1; font: inherit; font-size: .85em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
+  #paneOrdine .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
   .sortable-ghost { opacity: .4; }
 
   /* Mobile: è lo schermo che conta di più. Campi in colonna a tutta larghezza — altrimenti la
@@ -127,19 +131,24 @@
     .scroller { padding: 0 12px 16px; }
     h1 { margin-bottom: 12px; }
     .filters { gap: 8px; }
-    .filters > input[type=text], .ts-wrapper, .group, .seg, .sortbox, .sortbox > button { width: 100%; }
+    :root { --pane-h: 13rem; } /* sul telefono i campi stanno in colonna, quindi la scheda è più alta */
+    .filters > input[type=text], .ts-wrapper, .group, .seg { width: 100%; }
     .group input { flex: 1; width: auto; }
     .seg label { flex: 1; }
     .seg span { width: 100%; justify-content: center; }
-    #count { margin-left: 0; }
-    #sortPanel { position: fixed; inset: auto 8px 8px; width: auto; max-width: none; }
   }
 </style>
 </head>
 <body>
 <header>
 <h1><span class="mark" title="sakumaki">サク巻き</span> <span class="sub">__SUBTITLE__</span></h1>
-<div class="filters">
+<div class="tabs" role="tablist">
+  <button id="tabFiltri" class="tab on" type="button" role="tab" aria-selected="true" aria-controls="paneFiltri">Filtri</button>
+  <button id="tabOrdine" class="tab" type="button" role="tab" aria-selected="false" aria-controls="paneOrdine">Ordinamento <span id="sortCount"></span></button>
+  <span id="count"></span>
+</div>
+<div class="panes">
+<div class="filters" id="paneFiltri" role="tabpanel">
   <input id="q" type="text" placeholder="Cerca nel titolo…">
   <select id="fCountries" multiple></select>
   <select id="fGenres" multiple></select>
@@ -149,18 +158,15 @@
     <label><input type="radio" name="wl" value="out"><span title="solo le serie fuori dalla watchlist">Fuori</span></label>
   </span>
   <span class="group" title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
-  <div class="sortbox">
-    <button id="sortBtn" type="button" aria-expanded="false">Ordinamento <span id="sortCount"></span></button>
-    <div id="sortPanel" hidden>
-      <ul id="sortList"></ul>
-      <div class="row">
-        <select id="sortAdd"><option value="">Aggiungi criterio…</option></select>
-        <button id="sortClear" type="button">Azzera</button>
-      </div>
-      <p class="hint">Trascina ⠿ per cambiare la priorità. Anche il clic su un'intestazione accumula: primo clic aggiunge il criterio in coda, il secondo inverte il verso, il terzo lo toglie.</p>
-    </div>
+</div>
+<div id="paneOrdine" role="tabpanel" hidden>
+  <ul id="sortList"></ul>
+  <div class="row">
+    <select id="sortAdd"><option value="">Aggiungi criterio…</option></select>
+    <button id="sortClear" type="button">Azzera</button>
   </div>
-  <span id="count"></span>
+  <p class="hint">Trascina ⠿ per cambiare la priorità. Anche il clic su un'intestazione accumula: primo clic aggiunge il criterio in coda, il secondo inverte il verso, il terzo lo toglie.</p>
+</div>
 </div>
 </header>
 <div class="scroller">
@@ -278,7 +284,6 @@
   }
   function renderSort() {
     $("sortCount").textContent = sorts.length ? `(${sorts.length})` : "";
-    $("sortBtn").classList.toggle("on", sorts.length > 0);
     $("sortList").innerHTML = sorts.length
       ? sorts.map((s) => `<li data-k="${esc(s.k)}"><span class="grip" title="trascina per cambiare priorità">⠿</span><span class="lbl">${esc(labelOf(s.k))}</span><button data-act="dir" title="inverti il verso">${s.desc ? "▼ desc" : "▲ asc"}</button><button data-act="rm" title="togli">✕</button></li>`).join("")
       : `<li class="empty">nessun criterio</li>`;
@@ -329,14 +334,16 @@
   }
 
   for (const th of ths) th.onclick = () => { cycle(keyOf(th)); render(); };
-  $("sortBtn").onclick = (e) => {
-    e.stopPropagation();
-    const open = $("sortPanel").hidden;
-    $("sortPanel").hidden = !open;
-    $("sortBtn").setAttribute("aria-expanded", String(open));
+  const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")] };
+  for (const [nome, [tab]] of Object.entries(schede)) tab.onclick = () => {
+    for (const [altro, [t, pannello]] of Object.entries(schede)) {
+      const attiva = altro === nome;
+      t.classList.toggle("on", attiva);
+      t.setAttribute("aria-selected", String(attiva));
+      pannello.hidden = !attiva;
+    }
   };
-  $("sortPanel").onclick = (e) => {
-    e.stopPropagation();
+  $("paneOrdine").onclick = (e) => {
     const li = e.target.closest("li[data-k]");
     if (!li) return;
     const s = sorts.find((x) => x.k === li.dataset.k);
@@ -350,7 +357,6 @@
     render();
   };
   $("sortClear").onclick = () => { sorts = []; render(); };
-  document.addEventListener("click", (e) => { if (!e.target.closest(".sortbox")) $("sortPanel").hidden = true; });
   new Sortable($("sortList"), { handle: ".grip", animation: 120, onEnd: () => {
     sorts = [...$("sortList").children].map((li) => sorts.find((s) => s.k === li.dataset.k)).filter(Boolean);
     render();
