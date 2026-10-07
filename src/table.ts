@@ -24,17 +24,17 @@ const watchlistFile = Bun.file(`${dataDir}/watchlist.json`); // in locale di sol
 if (await progressFile.exists()) progress = await progressFile.json();
 else if (await watchlistFile.exists()) progress = progressBySeries(((await watchlistFile.json()) as { data: WatchlistItem[] }).data);
 
-// Una serie in watchlist che non ha una riga in catalogo resta invisibile nella pagina, e un titolo
-// che "dovrebbe" essere segnato e non lo è si spiega quasi sempre così: l'id della voce di watchlist
-// non è quello della serie che compare nel browse (variante, edizione, stagione come serie a sé) o la
-// serie non è disponibile in nessuno dei paesi scaricati. Il log del deploy è pubblico, ma id e titoli
-// delle serie in watchlist lo sono già nell'artifact e nella pagina.
+// Una voce di watchlist senza riga in catalogo resta invisibile nella pagina. Di norma sono i film:
+// il catalogo è il browse delle sole serie, e la voce di un film ha comunque un `series_id`, che punta
+// all'oggetto film. Una serie vera in questo elenco invece è un'anomalia (id diverso dal browse, o non
+// disponibile in nessuno dei paesi scaricati) e va guardata. Il log del deploy è pubblico, ma id e
+// titoli delle voci di watchlist lo sono già nell'artifact e nella pagina.
 const catalogIds = new Set(catalog.map((s) => s.id));
 const missing = Object.entries(progress).filter(([id]) => !catalogIds.has(id));
 if (missing.length) {
-  console.log(`${missing.length} serie in watchlist senza riga in catalogo:`);
-  // Il titolo manca negli artifact prodotti prima di questa modifica: il primo deploy dopo il merge usa ancora uno di quelli.
-  for (const [id, p] of missing) console.log(`  ${id}  ${p.title ?? "(titolo non disponibile)"}`);
+  console.log(`${missing.length} voci di watchlist senza riga in catalogo:`);
+  // Titolo e tipo mancano negli artifact prodotti prima di questa modifica: il primo deploy dopo il merge usa ancora uno di quelli.
+  for (const [id, p] of missing) console.log(`  ${id}  ${(p.type ?? "?").padEnd(8)} ${p.title ?? "(titolo non disponibile)"}`);
 }
 
 /** Media e deviazione standard dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
