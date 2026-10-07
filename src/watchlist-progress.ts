@@ -6,6 +6,7 @@ import type { WatchlistItem } from "./api";
  * fuori: non dice quante puntate hai visto e non serve a nessuna colonna.
  */
 export type Progress = {
+  title: string; // serve solo al log del deploy, per dire a chiare lettere quale serie non ha una riga in catalogo
   season: number;
   episode: number | null;
   fully_watched: boolean;
@@ -19,6 +20,7 @@ export function progressBySeries(data: WatchlistItem[]): Record<string, Progress
     const ep = w.panel.episode_metadata;
     if (!ep || out[ep.series_id]) continue; // una voce per serie: vince la prima, come in watchlist-votes.ts
     out[ep.series_id] = {
+      title: ep.series_title,
       season: ep.season_number,
       episode: ep.episode_number,
       fully_watched: w.fully_watched,
