@@ -65,10 +65,18 @@ export const login = (etpRt: string, proxy?: string): Promise<Token> =>
   tokenRequest("etp_rt_cookie", { Cookie: `etp_rt=${etpRt}` }, proxy);
 export const loginAnonymous = (proxy?: string): Promise<AnonToken> => tokenRequest("client_id", {}, proxy);
 
+/**
+ * Tutta la watchlist, una pagina per volta. `start` avanza di quante voci sono tornate davvero, non
+ * della pagina richiesta: se l'API tronca la pagina, avanzare di 100 salterebbe le voci in mezzo. Alla
+ * fine confronta le voci raccolte con il `total` dichiarato e lo scrive nel log: una voce che nell'app
+ * c'è e nella pagina no si capisce da qui, prima di cercare altrove.
+ */
 export async function fetchWatchlist(token: Token, locale = "en-US"): Promise<WatchlistItem[]> {
   const items: WatchlistItem[] = [];
   const pageSize = 100;
-  for (let start = 0; ; start += pageSize) {
+  let total = 0;
+  let pages = 0;
+  for (let start = 0; ; ) {
     const url = new URL(`${BASE}/content/v2/discover/${token.account_id}/watchlist`);
     url.search = new URLSearchParams({
       order: "desc",
@@ -83,9 +91,16 @@ export async function fetchWatchlist(token: Token, locale = "en-US"): Promise<Wa
     });
     if (!res.ok) throw new Error(`watchlist failed: ${res.status}`);
     const page: { total: number; data: WatchlistItem[] } = await res.json();
+    total = page.total;
+    pages++;
+    if (page.data.length === 0) break;
     items.push(...page.data);
-    if (page.data.length === 0 || items.length >= page.total) return items;
+    if (items.length >= total) break;
+    start += page.data.length;
   }
+  const level = items.length < total ? "warn" : "log";
+  console[level](`watchlist: ${items.length} voci raccolte in ${pages} pagine, ${total} dichiarate dall'API`);
+  return items;
 }
 
 type StarBucket = { displayed: string; unit: string; percentage: number };
