@@ -6,8 +6,9 @@ import type { WatchlistItem } from "./api";
  * fuori: non dice quante puntate hai visto e non serve a nessuna colonna.
  */
 export type Progress = {
-  // Titolo e tipo servono solo al log del deploy: una voce senza riga in catalogo è quasi sempre un film
-  // (`panel.type` "movie": il catalogo è il browse delle sole serie), e il titolo dice subito quale.
+  // Titolo e tipo servono solo al log del deploy. Una voce senza riga in catalogo è quasi sempre un film,
+  // ma il tipo non lo dice: i film sono serie con un episodio solo e il `panel.type` è "episode" anche per
+  // loro. È il titolo a riconoscerli ("Movie", "Recap", il nome del film).
   title: string;
   type: string;
   season: number;

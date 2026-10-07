@@ -53,23 +53,28 @@ La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il gi
 
 - L'incrocio è **per id**, mai per titolo. La watchlist non dà l'id della serie: dà l'episodio a cui
   riprendere (`panel`), e `watchlist-progress.ts` ne prende `episode_metadata.series_id`.
-- Il catalogo è il browse con `type=series`: **i film non ci sono**. Una voce di watchlist di un film ha
-  comunque un `series_id`, che punta all'oggetto film, e resta senza riga. Il deploy elenca nel log le
-  voci senza riga in catalogo con id, tipo e titolo: con `movie` è normale, con `episode` è un'anomalia
-  da guardare (serie non disponibile nei paesi scaricati, o id diverso da quello del browse).
+- Il catalogo è il browse con `type=series`: **i film non ci sono**. Sul servizio un film è una serie
+  con un episodio solo, con un suo `series_id` che il browse non elenca, e la voce di watchlist resta
+  senza riga. Il deploy elenca nel log le voci senza riga in catalogo con id, tipo e titolo. Il tipo è
+  `episode` anche per i film, quindi non distingue: li si riconosce dal titolo. Una serie vera in
+  quell'elenco è un'anomalia da guardare (non disponibile nei paesi scaricati, o id diverso dal browse).
 - Il run `watchlist` scrive nel log voci raccolte, pagine e `total` dichiarato dall'API, con un avviso se
   non tornano. La paginazione avanza di quante voci arrivano davvero, non di 100 fisso.
-- Al 7 ottobre 2026: 371 voci in watchlist, 362 righe segnate, 9 orfane e sono tutte film.
+- Al 7 ottobre 2026: 374 voci in 4 pagine piene, 9 orfane e sono tutte film o recap (Suzume, SPY x FAMILY
+  CODE: White, Sing a Bit of Harmony, Hakubo, Magical Explorer, Bokuai Kimiai Movie, Kabaneri "Life That
+  Burns", Slime "Scarlet Bond", BOCCHI THE ROCK! Recap Part 2).
 
 ### Caso aperto: una serie in watchlist che l'API non restituisce
 
-"Alya Sometimes Hides Her Feelings in Russian" (`G1XHJV0XM`) è in watchlist da un anno, con un solo
-profilo e con lo stesso id della riga in catalogo, eppure nella risposta dell'API del 7 ottobre non c'era
-sotto nessun id e nessuna voce era stata scartata. Le ipotesi rimaste sono la paginazione (corretta quel
-giorno, da verificare dal log del run successivo) o un'omissione dell'endpoint `discover/.../watchlist`.
-Se il log dice che raccolte e dichiarate coincidono e Alya manca ancora, il controllo successivo è la
-pagina watchlist del sito web, che usa le stesse API del nostro client: se manca anche lì mentre nell'app
-c'è, serve un altro endpoint.
+"Alya Sometimes Hides Her Feelings in Russian" (`G1XHJV0XM`) era in watchlist da un anno, con un solo
+profilo e con lo stesso id della riga in catalogo, eppure nella risposta dell'API del 7 ottobre mattina
+non c'era sotto nessun id e nessuna voce era stata scartata. La paginazione è esclusa: il run delle 19:09
+UTC ha raccolto 374 voci in 4 pagine piene, 374 dichiarate. Nell'app lo stesso giorno la lista della
+watchlist ordinata per titolo non la mostrava, mentre la scheda della serie la dava con il segnalibro
+attivo: la lista `discover/.../watchlist` e il flag sulla serie erano in disaccordo lato server. Dopo
+una rimozione e riaggiunta dall'app il run successivo è passato da 371 a 374 voci. Se ricapita, il
+rimedio è quello: togliere e rimettere la serie dall'app. Il nostro client legge la stessa lista
+dell'app, quindi non c'è un endpoint "più giusto" da interrogare.
 
 ## Limiti noti del punteggio
 

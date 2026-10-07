@@ -24,11 +24,12 @@ const watchlistFile = Bun.file(`${dataDir}/watchlist.json`); // in locale di sol
 if (await progressFile.exists()) progress = await progressFile.json();
 else if (await watchlistFile.exists()) progress = progressBySeries(((await watchlistFile.json()) as { data: WatchlistItem[] }).data);
 
-// Una voce di watchlist senza riga in catalogo resta invisibile nella pagina. Di norma sono i film:
-// il catalogo è il browse delle sole serie, e la voce di un film ha comunque un `series_id`, che punta
-// all'oggetto film. Una serie vera in questo elenco invece è un'anomalia (id diverso dal browse, o non
-// disponibile in nessuno dei paesi scaricati) e va guardata. Il log del deploy è pubblico, ma id e
-// titoli delle voci di watchlist lo sono già nell'artifact e nella pagina.
+// Una voce di watchlist senza riga in catalogo resta invisibile nella pagina. Di norma sono i film e i
+// recap: sono serie con un episodio solo, con un loro `series_id`, che il browse `type=series` non elenca.
+// Il tipo nel log è "episode" anche per loro, li si riconosce dal titolo. Una serie vera in questo elenco
+// invece è un'anomalia (id diverso dal browse, o non disponibile in nessuno dei paesi scaricati) e va
+// guardata. Il log del deploy è pubblico, ma id e titoli delle voci di watchlist lo sono già
+// nell'artifact e nella pagina.
 const catalogIds = new Set(catalog.map((s) => s.id));
 const missing = Object.entries(progress).filter(([id]) => !catalogIds.has(id));
 if (missing.length) {
