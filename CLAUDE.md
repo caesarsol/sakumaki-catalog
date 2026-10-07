@@ -72,9 +72,11 @@ non c'era sotto nessun id e nessuna voce era stata scartata. La paginazione è e
 UTC ha raccolto 374 voci in 4 pagine piene, 374 dichiarate. Nell'app lo stesso giorno la lista della
 watchlist ordinata per titolo non la mostrava, mentre la scheda della serie la dava con il segnalibro
 attivo: la lista `discover/.../watchlist` e il flag sulla serie erano in disaccordo lato server. Dopo
-una rimozione e riaggiunta dall'app il run successivo è passato da 371 a 374 voci. Se ricapita, il
-rimedio è quello: togliere e rimettere la serie dall'app. Il nostro client legge la stessa lista
-dell'app, quindi non c'è un endpoint "più giusto" da interrogare.
+una rimozione e riaggiunta dall'app il run successivo è passato da 371 a 374 voci, ma Alya mancava
+ancora. Il nostro client legge la stessa lista dell'app: per capire da che parte sta la divergenza c'è
+`bun run src/watchlist-probe.ts <series_id>`, da lanciare in locale con il `.env`: prova la lista con
+parametri diversi, la chiamata del segnalibro, la lista grezza degli id e l'oggetto serie, e stampa
+solo esiti e conteggi.
 
 ## Limiti noti del punteggio
 
