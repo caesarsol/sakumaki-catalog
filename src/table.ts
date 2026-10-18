@@ -65,9 +65,10 @@ const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
 const rated = catalog.filter((s) => s.rating?.total > 0);
 const catalogMean = rated.reduce((acc, s) => acc + fineRating(s), 0) / rated.length;
+/** Media bayesiana che può solo abbassare il voto: tirare verso la media del catalogo una serie sotto la media la premierebbe per avere pochi voti. */
 const weighted = (s: SeriesObject) => {
   const v = s.rating.total;
-  return (v * fineRating(s) + WEIGHT_VOTES * catalogMean) / (v + WEIGHT_VOTES);
+  return Math.min(fineRating(s), (v * fineRating(s) + WEIGHT_VOTES * catalogMean) / (v + WEIGHT_VOTES));
 };
 
 const top = catalog

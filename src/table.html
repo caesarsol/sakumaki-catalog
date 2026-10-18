@@ -157,7 +157,7 @@
     <label><input type="radio" name="wl" value="in"><span title="solo le serie in watchlist">In watchlist</span></label>
     <label><input type="radio" name="wl" value="out"><span title="solo le serie fuori dalla watchlist">Fuori</span></label>
   </span>
-  <span class="group" title="voti di fiducia della media bayesiana: V Bayes = (v·voto + m·media catalogo)/(v+m)">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
+  <span class="group" title="voti di fiducia della media bayesiana: V Bayes = min(voto, (v·voto + m·media catalogo)/(v+m))">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
 </div>
 <div id="paneOrdine" role="tabpanel" hidden>
   <ul id="sortList"></ul>
@@ -173,7 +173,7 @@
 <table>
   <thead><tr>
     <th data-k="title"><div class="peek"><div class="full">Titolo</div></div></th>
-    <th data-k="weighted" data-num title="media bayesiana: (v·voto + m·media catalogo)/(v+m), m regolabile nei filtri">V Bayes</th>
+    <th data-k="weighted" data-num title="media bayesiana che può solo abbassare il voto: min(voto, (v·voto + m·media catalogo)/(v+m)), m regolabile nei filtri">V Bayes</th>
     <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
     <th data-k="votes" data-num>Votanti</th>
@@ -317,7 +317,7 @@
     const wl = watchlist();
     const cIn = fCountries.in, cOut = fCountries.out, gIn = fGenres.in, gOut = fGenres.out;
     const m = Number($("m").value) || 0, C = __C__; // media del catalogo intero, calcolata da table.ts
-    for (const r of rows) r.weighted = (r.votes * r.rating + m * C) / (r.votes + m);
+    for (const r of rows) r.weighted = Math.min(r.rating, (r.votes * r.rating + m * C) / (r.votes + m)); // solo verso il basso, come in table.ts
     const visible = rows.filter((r) =>
       (!q || r.title.toLowerCase().includes(q)) &&
       cIn.every((c) => r.countries.includes(c)) && !cOut.some((c) => r.countries.includes(c)) &&
