@@ -253,6 +253,9 @@
     const tip = r.ep_total ? `${k} viste su ${n} puntate` : `${n} puntate`;
     return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
   };
+  // Una quota che nella barra (9rem, 144px) varrebbe meno di un pixel non si vedrebbe, ma il suo spazio da 1px sì,
+  // e sembrerebbe una stella con dei voti: la si toglie con il suo spazio. Resta nel suggerimento al passaggio.
+  const MIN_PCT = 100 / 144;
   /** Voto esterno: il numero, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
   const extCell = (score, votes, n, site, digits) =>
     score === -2 ? `<td></td>`
@@ -370,7 +373,7 @@
       <td class="num">${r.lcb.toFixed(3)}</td>
       <td class="num">${r.rating.toFixed(3)}</td>
       <td class="num">${fmt.format(r.votes)}</td>
-      <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>`).join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div></td>
+      <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => s.pct >= MIN_PCT ? `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>` : "").join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div></td>
       ${extCell(r.al, r.al_votes, r.al_n, "AniList", 0)}
       ${extCell(r.mal, r.mal_votes, r.mal_n, "MAL", 2)}
       <td class="num">${r.year ?? ""}</td>
