@@ -120,7 +120,7 @@
   .ts-wrapper { width: 17rem; font-size: .9rem; } /* larghezza fissa: i chip vanno a capo dentro il campo invece di allargare la barra */
   .ts-wrapper.multi .ts-control { min-height: var(--h); padding: 2px 4px; background: var(--panel); border-color: var(--line); border-radius: 6px; }
   .ts-wrapper.multi.focus .ts-control { border-color: var(--accent); box-shadow: none; }
-  .ts-dropdown { border-color: var(--line); border-radius: 6px; }
+  .ts-dropdown { border-color: var(--line); border-radius: 6px; z-index: 20; } /* sta nel body: sopra la tabella e la sua intestazione sticky */
   .ts-dropdown .active { background: var(--accent-weak); color: var(--fg); }
   .ts-wrapper.multi .ts-control > .item { cursor: pointer; border-radius: 4px; border: 1px solid; padding: 1px 6px; }
   .ts-wrapper.multi .ts-control > .item.in { color: var(--in); border-color: color-mix(in srgb, var(--in) 50%, transparent); background: color-mix(in srgb, var(--in) 10%, transparent); }
@@ -277,6 +277,8 @@
     const modes = new Map(); // value -> "in" | "out"; l'assenza dai chip è il terzo stato
     const ts = new TomSelect(select, {
       options, placeholder, maxItems: null, hideSelected: true, closeAfterSelect: false,
+      // la lista nel body: dentro il pannello dei filtri, alto fisso e con overflow, verrebbe tagliata
+      dropdownParent: "body",
       hidePlaceholder: true, // "tutti i paesi" con dei chip già scelti sarebbe una bugia
       plugins: ["remove_button"],
       render: {
