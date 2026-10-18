@@ -60,17 +60,17 @@ async function post(query: string, variables: object): Promise<any> {
   }
 }
 
-// Tutti gli anime di AniList, in ordine di id: l'API non sa filtrare per link esterno. Si avanza per id
-// e non per numero di pagina, perché oltre i 5000 risultati di una stessa query (pagina 100) risponde 400.
-const ANIME = `query ($after: Int) { Page(page: 1, perPage: 50) {
-  media(type: ANIME, sort: ID, id_greater: $after) { id idMal meanScore stats { scoreDistribution { amount } } externalLinks { url } } } }`;
+// Tutti gli anime di AniList, un anno di uscita per volta: l'API non sa filtrare per link esterno, e oltre
+// i 5000 risultati di una stessa query (pagina 100) risponde 400. Un anno non arriva mai a 5000. Le date
+// sono interi AAAAMMGG, con 0 per mese e giorno ignoti: l'intervallo li comprende.
+const ANIME = `query ($page: Int, $from: FuzzyDateInt, $to: FuzzyDateInt) { Page(page: $page, perPage: 50) { pageInfo { hasNextPage }
+  media(type: ANIME, sort: ID, startDate_greater: $from, startDate_lesser: $to) { id idMal meanScore stats { scoreDistribution { amount } } externalLinks { url } } } }`;
 const matched = new Map<string, Entry[]>();
 let pages = 0;
-for (let after = 0; ; ) {
-  const { Page } = await post(ANIME, { after });
+const lastYear = new Date().getFullYear() + 1;
+for (let year = 1917, page = 1; year <= lastYear; ) {
+  const { Page } = await post(ANIME, { page, from: (year - 1) * 10000 + 9999, to: (year + 1) * 10000 });
   pages++;
-  if (!Page.media.length) break;
-  after = Page.media.at(-1).id;
   for (const m of Page.media) {
     const series = m.externalLinks.map((l: { url: string }) => seriesOf(l.url)).find(Boolean);
     if (!series) continue;
@@ -78,7 +78,12 @@ for (let after = 0; ; ) {
     if (!matched.has(series)) matched.set(series, []);
     matched.get(series)!.push({ id: m.id, idMal: m.idMal, meanScore: m.meanScore, votes });
   }
-  if (pages % 50 === 0) console.log(`AniList: ${pages} pagine, fino all'id ${after}, ${matched.size} serie abbinate`);
+  if (Page.pageInfo.hasNextPage) page++;
+  else {
+    if (year % 10 === 0) console.log(`AniList: fino al ${year}, ${pages} pagine, ${matched.size} serie abbinate`);
+    year++;
+    page = 1;
+  }
   await Bun.sleep(ANILIST_PAUSE_MS);
 }
 
