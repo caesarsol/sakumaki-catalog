@@ -23,5 +23,5 @@ jobs:
           gh run watch "$id" -R "$R" --exit-status > /dev/null
           gh run download "$id" -R "$R" --name watchlist --dir data
       - run: |
-          jq -c 'to_entries[] | select(.key | test("GXJHM3P19|G1XHJV0XM|GXJHM3N2E|GYMGD89VY|GYZJ43JMR|GRG5WWD4R|GRQ4QG4GY")) | {id: .key, s: .value.season, done: .value.ep_done, tot: .value.ep_total, started: .value.ep_started}' data/watchlist-progress.json
+          jq -c 'to_entries[] | select(.key | test("GXJHM3N2E|GYMGD89VY|GRX0MGN76|G65VXM1P6|GP5HJ845X|GRWE17JQR|GYNQJ8GXY|G679D84KY|GRQ4Z4XQY|GXJHM3P19")) | {id: .key, s: .value.season, done: .value.ep_done, tot: .value.ep_total, started: .value.ep_started}' data/watchlist-progress.json
           jq -r '[.[]] | "con ep_total: \([.[]|select(.ep_total)]|length) su \(length); iniziate: \([.[]|select(.ep_started)]|length)"' data/watchlist-progress.json
