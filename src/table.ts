@@ -143,7 +143,11 @@ const rows = top.map((s) => ({
 // nessun CDN da cui dipendere, versioni fissate in package.json. Un "</script" in una libreria chiuderebbe il tag.
 const vendor = async (path: string) => (await Bun.file(`${import.meta.dir}/../node_modules/${path}`).text()).replace(/<\/(script|style)/gi, "<\\/$1");
 const vendorCss = await vendor("tom-select/dist/css/tom-select.css");
-const vendorJs = [await vendor("tom-select/dist/js/tom-select.complete.min.js"), await vendor("sortablejs/Sortable.min.js")].join("\n;\n");
+// TanStack Virtual esce solo come moduli: lo si impacchetta in un iife che lo espone come globale.
+const bundle = await Bun.build({ entrypoints: [`${import.meta.dir}/page-vendor.ts`], format: "iife", target: "browser", minify: true });
+if (!bundle.success) throw new AggregateError(bundle.logs, "impacchettamento di page-vendor.ts fallito");
+const virtualJs = (await bundle.outputs[0]!.text()).replace(/<\/(script|style)/gi, "<\\/$1");
+const vendorJs = [await vendor("tom-select/dist/js/tom-select.complete.min.js"), await vendor("sortablejs/Sortable.min.js"), virtualJs].join("\n;\n");
 const template = await Bun.file(`${import.meta.dir}/table.html`).text();
 // Le sostituzioni con una funzione: una stringa interpreterebbe i "$&" e "$'" che il codice minificato, o un
 // titolo, possono contenere. Le librerie per ultime, così nessun segnaposto si cerca dentro il loro codice.

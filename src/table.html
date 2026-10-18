@@ -54,7 +54,11 @@
 
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
   th, td { padding: 6px var(--cell-pad); border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
-  th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
+  th, tbody td { height: 42px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; } /* 42px è anche ROW_H nello script: la virtualizzazione conta sulle righe tutte alte uguali */
+  /* Righe di servizio della virtualizzazione: i due spazi vuoti al posto delle righe non disegnate, e la riga
+     "metro", alta zero e invisibile, che porta in ogni colonna il testo più largo fra tutte le serie. */
+  tbody tr.pad td { height: auto; padding: 0; border: 0; }
+  tbody tr.sizer td { height: 0; line-height: 0; border: 0; visibility: hidden; }
   td.title { font-size: .95em; }
   /* Titolo a tutta larghezza finché non si scorre; scorrendo, della colonna resta solo una striscia
      di cinque lettere ancorata a sinistra, per capire su che riga si è. Due sticky annidati, senza
@@ -364,31 +368,79 @@
     const cIn = fCountries.in, cOut = fCountries.out, gIn = fGenres.in, gOut = fGenres.out;
     const m = Number($("m").value) || 0, C = __C__; // media del catalogo intero, calcolata da table.ts
     for (const r of rows) r.weighted = Math.min(r.rating, (r.votes * r.rating + m * C) / (r.votes + m)); // solo verso il basso, come in table.ts
-    const visible = rows.filter((r) =>
+    visible = rows.filter((r) =>
       (!q || r.title.toLowerCase().includes(q)) &&
       cIn.every((c) => r.countries.includes(c)) && !cOut.some((c) => r.countries.includes(c)) &&
       gIn.every((g) => r.genres.includes(g)) && !gOut.some((g) => r.genres.includes(g)) &&
       (wl !== "in" || r.in_watchlist) && (wl !== "out" || !r.in_watchlist));
     visible.sort(compare);
-    $("rows").innerHTML = visible.map((r) => `<tr>
-      <td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>
-      <td class="num">${r.weighted.toFixed(3)}</td>
-      <td class="num">${r.lcb.toFixed(3)}</td>
-      <td class="num">${r.rating.toFixed(3)}</td>
-      <td class="num">${fmt.format(r.votes)}</td>
-      <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => s.pct >= MIN_PCT ? `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>` : "").join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div></td>
-      ${extCell(r.al, r.al_votes, r.al_n, "AniList", 0)}
-      ${extCell(r.mal, r.mal_votes, r.mal_n, "MAL", 2)}
-      <td class="num">${r.year ?? ""}</td>
-      <td class="num">${r.seasons}</td>
-      <td class="num">${r.episodes}</td>
-      ${countries.map((c) => `<td class="flag">${r.countries.includes(c.iso2) ? flag(c.iso2) : ""}</td>`).join("")}
-      <td class="mine start" title="${esc(watchlistTitle(r))}">${r.wl_fav ? "★" : yes(r.in_watchlist)}</td>
-      <td class="num mine">${episodeLabel(r)}${r.wl_watched ? " ✓" : ""}</td>
-    </tr>`).join("");
+    if (!sizer) sizer = sizerRow();
+    virtualizer.setOptions({ ...virtualizer.options, count: visible.length });
+    virtualizer._willUpdate();
+    paint(true);
     $("count").textContent = `${visible.length} / ${rows.length} serie`;
     renderSort();
   }
+
+  /* ---- righe virtualizzate ---------------------------------------------------------------
+     Disegnare tutte le 2000 righe costava 3 secondi di layout a ogni filtro, e su iOS lo scorrimento veloce
+     lasciava righe bianche finché il browser non le recuperava. Si disegnano solo le righe visibili più un
+     margine, scelte da TanStack Virtual (senza framework), con due righe vuote sopra e sotto alte quanto
+     quelle saltate. Le righe sono alte tutte ROW_H, quindi la stima è esatta e non serve misurarle. */
+  const ROW_H = 42;
+  /** Una funzione per colonna, nell'ordine delle intestazioni. */
+  const cells = [
+    (r) => `<td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>`,
+    (r) => `<td class="num">${r.weighted.toFixed(3)}</td>`,
+    (r) => `<td class="num">${r.lcb.toFixed(3)}</td>`,
+    (r) => `<td class="num">${r.rating.toFixed(3)}</td>`,
+    (r) => `<td class="num">${fmt.format(r.votes)}</td>`,
+    (r) => `<td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => s.pct >= MIN_PCT ? `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>` : "").join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div></td>`,
+    (r) => extCell(r.al, r.al_votes, r.al_n, "AniList", 0),
+    (r) => extCell(r.mal, r.mal_votes, r.mal_n, "MAL", 2),
+    (r) => `<td class="num">${r.year ?? ""}</td>`,
+    (r) => `<td class="num">${r.seasons}</td>`,
+    (r) => `<td class="num">${r.episodes}</td>`,
+    ...countries.map((c) => (r) => `<td class="flag">${r.countries.includes(c.iso2) ? flag(c.iso2) : ""}</td>`),
+    (r) => `<td class="mine start" title="${esc(watchlistTitle(r))}">${r.wl_fav ? "★" : yes(r.in_watchlist)}</td>`,
+    (r) => `<td class="num mine">${episodeLabel(r)}${r.wl_watched ? " ✓" : ""}</td>`,
+  ];
+  const plain = (html) => html.replace(/<[^>]*>/g, "");
+  /**
+   * La tabella calcola le larghezze delle colonne sulle righe presenti: con le righe che cambiano scorrendo,
+   * le colonne si allargherebbero e restringerebbero. La riga metro mette in ogni colonna il testo più lungo
+   * fra tutte le serie, solo testo e con la classe della cella, così pesa sulla larghezza e non sull'altezza.
+   * Le celle a larghezza fissa (titolo, distribuzione, bandiere) non ne hanno bisogno, ma non fa danno.
+   */
+  let sizer = "";
+  function sizerRow() {
+    return `<tr class="sizer" aria-hidden="true">${cells.map((f) => {
+      let best = "", len = -1;
+      for (const r of rows) { const text = plain(f(r)); if (text.length > len) { len = text.length; best = text; } }
+      const cls = f(rows[0]).match(/^<td class="([^"]*)"/)?.[1] ?? "";
+      return `<td class="${cls}">${best}</td>`;
+    }).join("")}</tr>`;
+  }
+  const pad = (n) => (n > 0 ? `<tr class="pad" style="height:${n * ROW_H}px"><td colspan="${cells.length}"></td></tr>` : "");
+  let painted = "";
+  /** Ridisegna solo se cambia l'intervallo di righe: TanStack chiama onChange a ogni evento di scorrimento. */
+  function paint(force) {
+    const items = virtualizer.getVirtualItems();
+    const first = items[0]?.index ?? 0, last = items.at(-1)?.index ?? -1;
+    const key = `${first}-${last}`;
+    if (!force && key === painted) return;
+    painted = key;
+    $("rows").innerHTML = sizer + pad(first) + items.map((it) => `<tr>${cells.map((f) => f(visible[it.index])).join("")}</tr>`).join("") + pad(visible.length - last - 1);
+  }
+  let visible = [];
+  const { Virtualizer, elementScroll, observeElementOffset, observeElementRect } = VirtualCore;
+  const virtualizer = new Virtualizer({
+    count: 0, getScrollElement: () => document.querySelector(".scroller"), estimateSize: () => ROW_H, overscan: 12,
+    scrollToFn: elementScroll, observeElementRect, observeElementOffset,
+    scrollMargin: ROW_H, // le righe partono sotto l'intestazione, alta anche lei ROW_H
+    onChange: () => paint(false),
+  });
+  virtualizer._didMount();
 
   for (const th of ths) th.onclick = () => { clickSort(keyOf(th)); render(); };
   const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")] };

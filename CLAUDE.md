@@ -57,6 +57,9 @@ non valido e il run fallisce senza job.
 - Commenti e messaggi di commit in italiano. I commenti dicono il perché, non il cosa.
 - Le librerie della pagina (Tom Select, SortableJS) sono dipendenze npm con versione fissata: `table.ts` ne
   copia i file da `node_modules` dentro la pagina, che resta un file unico e non chiama nessun CDN.
+- La tabella è virtualizzata (TanStack Virtual, `page-vendor.ts` impacchettato da `table.ts`): nella pagina
+  ci sono solo le righe visibili più un margine. Le righe devono restare tutte alte uguali, `ROW_H` nello
+  script e l'altezza di `th, tbody td` nel CSS; una riga "metro" invisibile tiene ferme le larghezze.
 - `data/` è gitignored: è tutta roba generata o scaricata.
 - Gli host dell'API e del sito stanno nei secret, non nel repo: i log di Actions sono pubblici.
 - Il repo è pubblico, quindi lo sono anche artifact e pagina: fuori da lì tenere tutto ciò che non
