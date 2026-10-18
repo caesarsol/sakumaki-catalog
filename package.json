@@ -18,5 +18,9 @@
     "@types/bun": "latest",
     "browser-sync": "^3.0.4",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "sortablejs": "1.15.6",
+    "tom-select": "2.4.3"
   }
 }

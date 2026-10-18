@@ -139,12 +139,21 @@ const rows = top.map((s) => ({
   mal_votes: external?.series[s.id]?.mal?.votes ?? 0,
   mal_n: external?.series[s.id]?.mal?.entries ?? 0,
 }));
+// Le librerie della pagina vengono da node_modules e finiscono dentro la pagina, che resta un file unico:
+// nessun CDN da cui dipendere, versioni fissate in package.json. Un "</script" in una libreria chiuderebbe il tag.
+const vendor = async (path: string) => (await Bun.file(`${import.meta.dir}/../node_modules/${path}`).text()).replace(/<\/(script|style)/gi, "<\\/$1");
+const vendorCss = await vendor("tom-select/dist/css/tom-select.css");
+const vendorJs = [await vendor("tom-select/dist/js/tom-select.complete.min.js"), await vendor("sortablejs/Sortable.min.js")].join("\n;\n");
 const template = await Bun.file(`${import.meta.dir}/table.html`).text();
+// Le sostituzioni con una funzione: una stringa interpreterebbe i "$&" e "$'" che il codice minificato, o un
+// titolo, possono contenere. Le librerie per ultime, così nessun segnaposto si cerca dentro il loro codice.
 const html = template
   .replaceAll("__SUBTITLE__", MIN_RATING > 0 ? `serie con voto ≥ ${MIN_RATING}` : "catalogo serie")
   .replace("__M__", String(WEIGHT_VOTES))
   .replace("__COUNTRIES__", JSON.stringify(countries))
   .replace("__C__", String(round3(catalogMean)))
-  .replace("__ROWS__", JSON.stringify(rows).replaceAll("</", "<\\/"));
+  .replace("__ROWS__", () => JSON.stringify(rows).replaceAll("</", "<\\/"))
+  .replace("__VENDOR_CSS__", () => vendorCss)
+  .replace("__VENDOR_JS__", () => vendorJs);
 await Bun.write(`${dataDir}/index.html`, html);
 console.log(`${top.length} serie su ${catalog.length} (voto >= ${MIN_RATING}): data/catalog-scored.ndjson, data/index.html`);

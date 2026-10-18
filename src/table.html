@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>サク巻き · __SUBTITLE__</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.css">
+<style>__VENDOR_CSS__</style>
 <style>
   :root {
     color-scheme: light; /* solo chiaro: senza, i controlli nativi seguono il tema di sistema e sul tema scuro finiscono scuri su chiaro */
@@ -220,8 +220,7 @@
 </table>
 </div>
 <script id="data" type="application/json">__ROWS__</script>
-<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>__VENDOR_JS__</script>
 <script>
   const rows = JSON.parse(document.getElementById("data").textContent);
   const $ = (id) => document.getElementById(id);

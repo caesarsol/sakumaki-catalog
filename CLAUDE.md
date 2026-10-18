@@ -55,7 +55,8 @@ non valido e il run fallisce senza job.
 ## Convenzioni
 
 - Commenti e messaggi di commit in italiano. I commenti dicono il perché, non il cosa.
-- Nessuna dipendenza a runtime nel repo: Tom Select e SortableJS arrivano da CDN dentro la pagina.
+- Le librerie della pagina (Tom Select, SortableJS) sono dipendenze npm con versione fissata: `table.ts` ne
+  copia i file da `node_modules` dentro la pagina, che resta un file unico e non chiama nessun CDN.
 - `data/` è gitignored: è tutta roba generata o scaricata.
 - Gli host dell'API e del sito stanno nei secret, non nel repo: i log di Actions sono pubblici.
 - Il repo è pubblico, quindi lo sono anche artifact e pagina: fuori da lì tenere tutto ciò che non
