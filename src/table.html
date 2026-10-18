@@ -139,6 +139,7 @@
   .tabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
   .tab { font: inherit; font-size: .9rem; cursor: pointer; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); padding: 6px 10px; margin-bottom: -1px; }
   .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab, #count { white-space: nowrap; } /* tre schede e il conteggio su una riga sola, anche sul telefono */
   .panes { height: var(--pane-h); overflow-y: auto; overflow-x: hidden; }
   .panes > [hidden] { display: none; }
   #paneOrdine { max-width: 26rem; }
@@ -150,7 +151,8 @@
   #sortList button, #sortClear { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--fg); padding: 2px 7px; }
   #paneOrdine .row { display: flex; gap: 6px; }
   #paneOrdine select { flex: 1; font: inherit; font-size: .85em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
-  #paneOrdine .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
+  #paneVoti { max-width: 26rem; }
+  #paneOrdine .hint, #paneVoti .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
   .sortable-ghost { opacity: .4; }
 
   /* Mobile: è lo schermo che conta di più. Campi in colonna a tutta larghezza — altrimenti la
@@ -167,6 +169,8 @@
     .group input { flex: 1; width: auto; }
     .seg label { flex: 1; }
     .seg span { width: 100%; justify-content: center; }
+    .tab { padding: 6px 7px; }
+    #count { font-size: .78rem; }
   }
   /* Safari su iOS ingrandisce la pagina quando va a fuoco un campo con testo sotto i 16px, compreso
      l'input nascosto dentro Tom Select: a 16px non lo fa più. Solo su iOS (è l'unico a fare lo zoom),
@@ -182,6 +186,7 @@
 <div class="tabs" role="tablist">
   <button id="tabFiltri" class="tab on" type="button" role="tab" aria-selected="true" aria-controls="paneFiltri">Filtri</button>
   <button id="tabOrdine" class="tab" type="button" role="tab" aria-selected="false" aria-controls="paneOrdine">Ordinamento <span id="sortCount"></span></button>
+  <button id="tabVoti" class="tab" type="button" role="tab" aria-selected="false" aria-controls="paneVoti">Voti</button>
   <span id="count"></span>
 </div>
 <div class="panes">
@@ -194,7 +199,10 @@
     <label><input type="radio" name="wl" value="in"><span title="solo le serie in watchlist">In watchlist</span></label>
     <label><input type="radio" name="wl" value="out"><span title="solo le serie fuori dalla watchlist">Fuori</span></label>
   </span>
+</div>
+<div class="filters" id="paneVoti" role="tabpanel" hidden>
   <span class="group" title="voti di fiducia della media bayesiana: V Bayes = min(voto, (v·voto + m·media catalogo)/(v+m))">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
+  <p class="hint">V Bayes tira il voto verso la media del catalogo come se ogni serie avesse altri m voti nella media, e solo verso il basso: con pochi votanti una serie non sale in cima. Più m è alto, più servono voti per contare.</p>
 </div>
 <div id="paneOrdine" role="tabpanel" hidden>
   <ul id="sortList"></ul>
@@ -451,7 +459,7 @@
   virtualizer._didMount();
 
   for (const th of ths) th.onclick = () => { clickSort(keyOf(th)); render(); };
-  const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")] };
+  const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")], Voti: [$("tabVoti"), $("paneVoti")] };
   for (const [nome, [tab]] of Object.entries(schede)) tab.onclick = () => {
     for (const [altro, [t, pannello]] of Object.entries(schede)) {
       const attiva = altro === nome;
