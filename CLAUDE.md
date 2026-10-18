@@ -19,13 +19,38 @@ Usa i dati veri, presi dagli ultimi artifact di Actions: `catalog` (da `catalog.
 Limite noto: da Claude Code sul web il download degli artifact **non funziona** — l'API risponde ma
 reindirizza a `blob.core.windows.net`, che il proxy dell'ambiente rifiuta (vale per `gh run download`,
 per l'MCP di GitHub e per curl sul link firmato); anche il sito pubblicato (`caesarsol.github.io`) è
-irraggiungibile. Funzionano invece la lettura di run, job e log (`gh run list/view`, `gh api`, l'MCP),
+irraggiungibile. Funzionano invece la lettura di run e job (`gh run list/view`, `gh api`) e dei log con l'MCP,
 anche senza token perché il repo è pubblico. In quel caso si ripiega su dati sintetici della stessa forma,
 **dicendolo esplicitamente** invece di far passare l'anteprima per dati reali.
 
 La scorciatoia che funziona: chi lavora con Claude scarica lo zip dell'artifact dalla pagina di Actions e
 lo carica in chat. L'artifact `github-pages` contiene `artifact.tar` con la pagina intera, e le righe
 stanno in JSON dentro `<script id="data">`: da lì si legge tutto, id e stato watchlist compresi.
+
+## Interrogare l'API vera: il ramo della sonda
+
+Da Claude Code sul web l'API del servizio, AniList, Jikan e NordVPN sono irraggiungibili, il dispatch dei
+workflow via MCP risponde 403 e `gh run view --log` è rifiutato dal proxy. Funzionano due cose: il push su
+un ramo `claude/…` e la lettura dei log con l'MCP (`get_job_logs`, con l'id del job da
+`gh api repos/caesarsol/sakumaki-catalog/actions/runs/<run>/jobs`). Per questo esiste il ramo
+**`claude/probe-tmp`**, da tenere: il suo `.github/workflows/probe.yml` parte a ogni push sul ramo, con i
+secret del repo (`AUTH_COOKIE`, `API_BASE`, `NORD_USER`, `NORD_PASS`). **Ogni domanda sull'API reale passa
+da lì** invece di indovinare la forma di una risposta:
+
+- uno script di sonda in `src/` sul ramo (`bun run src/probe.ts`), che chiama l'API e stampa quel che serve;
+- `gh workflow run <workflow>.yml --ref main -R "$R"` per lanciare un workflow su main, con `actions: write`
+  fra i permessi (anche `gh run watch` per aspettarlo dentro lo stesso job);
+- `gh run download` di un artifact più `jq`, per leggere i dati veri di watchlist, catalogo o voti.
+
+Prima di usarlo lo si riallinea a main (`git fetch origin main claude/probe-tmp`,
+`git checkout -B claude/probe-tmp origin/claude/probe-tmp`, `git merge origin/main`), si cambiano gli step,
+si fa commit e push sul ramo; su main non si fa mai merge del ramo, così la sua storia resta fuori. Il ramo
+non si può cancellare dalla sessione, ma non serve: è lì apposta.
+
+**I log di Actions sono pubblici**: la sonda stampa solo esiti, conteggi, nomi di campi e dati che sono già
+pubblici nella pagina o negli artifact (id, titoli, avanzamento), mai host, account, token o cookie. Il
+workflow va scritto con i comandi in blocchi `run: |`: un `: ` in una riga non quotata rende il file YAML
+non valido e il run fallisce senza job.
 
 ## Convenzioni
 
