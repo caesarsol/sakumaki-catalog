@@ -165,7 +165,7 @@
     <select id="sortAdd"><option value="">Aggiungi criterio…</option></select>
     <button id="sortClear" type="button">Azzera</button>
   </div>
-  <p class="hint">Trascina ⠿ per cambiare la priorità. Anche il clic su un'intestazione accumula: primo clic aggiunge il criterio in coda, il secondo inverte il verso, il terzo lo toglie.</p>
+  <p class="hint">Trascina ⠿ per cambiare la priorità. Il clic su un'intestazione sostituisce l'ordinamento con quella colonna; entro 5 secondi un altro clic inverte il verso e il terzo la toglie, dopo i 5 secondi il clic la toglie e basta.</p>
 </div>
 </div>
 </header>
@@ -274,12 +274,21 @@
     }
     return 0;
   };
-  /** Un clic accumula: assente → verso naturale (decrescente per i numeri) → inverso → di nuovo assente. */
-  function cycle(k) {
+  /* Il clic su un'intestazione cambia verso solo a ridosso del clic precedente sulla stessa colonna:
+     tornandoci dopo un po' si vuole quasi sempre toglierla, e non ricordarsi a che punto del giro era.
+     Una colonna non ancora in pila prende il posto di tutto l'ordinamento: la pila a più criteri si
+     costruisce dal pannello, e un clic distratto su un'intestazione non deve allungarla. */
+  const CYCLE_MS = 5000;
+  let lastClick = { k: null, t: 0 };
+  function clickSort(k) {
     const natural = columns.find((c) => c.k === k)?.num ?? false;
     const i = sorts.findIndex((s) => s.k === k);
-    if (i < 0) sorts.push({ k, desc: natural });
-    else if (sorts[i].desc === natural) sorts[i].desc = !natural;
+    const now = Date.now();
+    const recent = lastClick.k === k && now - lastClick.t < CYCLE_MS;
+    lastClick = { k, t: now };
+    if (i < 0) sorts = [{ k, desc: natural }];
+    else if (!recent) sorts.splice(i, 1);
+    else if (sorts[i].desc === natural) sorts[i].desc = !natural; // assente → verso naturale (decrescente per i numeri) → inverso → assente
     else sorts.splice(i, 1);
   }
   function renderSort() {
@@ -333,7 +342,7 @@
     renderSort();
   }
 
-  for (const th of ths) th.onclick = () => { cycle(keyOf(th)); render(); };
+  for (const th of ths) th.onclick = () => { clickSort(keyOf(th)); render(); };
   const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")] };
   for (const [nome, [tab]] of Object.entries(schede)) tab.onclick = () => {
     for (const [altro, [t, pannello]] of Object.entries(schede)) {
