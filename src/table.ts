@@ -44,8 +44,7 @@ function starStats(s: SeriesObject): { mean: number; sd: number } {
   let sumSq = 0;
   let n = 0;
   for (const stars of [1, 2, 3, 4, 5] as const) {
-    const b = s.rating[`${stars}s`];
-    const count = parseFloat(b.displayed) * (b.unit === "K" ? 1e3 : b.unit === "M" ? 1e6 : 1);
+    const count = starCount(s.rating[`${stars}s`]);
     sum += stars * count;
     sumSq += stars * stars * count;
     n += count;
@@ -55,6 +54,16 @@ function starStats(s: SeriesObject): { mean: number; sd: number } {
   return { mean, sd: Math.sqrt(Math.max(0, sumSq / n - mean * mean)) };
 }
 const fineRating = (s: SeriesObject) => starStats(s).mean;
+const starCount = (b: SeriesObject["rating"]["1s"]) => parseFloat(b.displayed) * (b.unit === "K" ? 1e3 : b.unit === "M" ? 1e6 : 1);
+/**
+ * Quota di ogni stella ricalcolata dai conteggi, a un decimale. La `percentage` dell'API è intera e
+ * arrotondata per conto suo: le quote non fanno 100 e ordinando per stella le serie finiscono a pari merito a blocchi.
+ */
+function starShares(s: SeriesObject) {
+  const buckets = ([1, 2, 3, 4, 5] as const).map((k) => s.rating[`${k}s`]);
+  const n = buckets.reduce((acc, b) => acc + starCount(b), 0);
+  return buckets.map((b) => ({ pct: n ? Math.round((starCount(b) / n) * 1000) / 10 : b.percentage, shown: b.displayed + b.unit }));
+}
 /** Limite inferiore dell'intervallo di confidenza al 95 % della media: scende con pochi voti, non sale mai. Tagliato a 1. */
 function lowerBound(s: SeriesObject): number {
   const { mean, sd } = starStats(s);
@@ -91,7 +100,7 @@ const rows = top.map((s) => ({
   rating: s.rating_fine,
   lcb: s.rating_lcb,
   votes: s.rating.total,
-  stars: ([1, 2, 3, 4, 5] as const).map((k) => ({ pct: s.rating[`${k}s`].percentage, shown: s.rating[`${k}s`].displayed + s.rating[`${k}s`].unit })),
+  stars: starShares(s),
   year: s.series_metadata.series_launch_year,
   seasons: s.series_metadata.season_count,
   episodes: s.series_metadata.episode_count,

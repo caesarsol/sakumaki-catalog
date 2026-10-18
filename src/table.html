@@ -84,8 +84,10 @@
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
   th[data-k="wl_rank"], td.mine.start { border-left: 1px solid var(--line); padding-left: 8px; } /* stacca il blocco personale dalle bandiere */
   .genres { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; }
+  .bar { display: flex; gap: 1px; width: 9rem; height: 10px; margin-top: 4px; position: relative; }
   .bar span { border-radius: 1px; min-width: 0; }
+  /* Il voto medio sulla scala 1–5 della barra: un triangolo dentro i 10 px della barra, che quindi non cresce in altezza. */
+  .bar .vote { position: absolute; top: 0; width: 0; height: 0; border: 4px solid transparent; border-top: 5px solid #000; border-bottom: 0; transform: translateX(-50%); }
   .legend { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
   .legend i { width: 10px; height: 10px; border-radius: 1px; display: inline-block; }
 
@@ -177,7 +179,7 @@
     <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
     <th data-k="votes" data-num>Votanti</th>
-    <th data-k="s:5" data-num title="1★→5★ chiaro→scuro; larghezze ∝ √quota per rendere leggibile la coda; il clic ordina per quota di 5★, le altre stelle stanno nel pannello dell'ordinamento">Distribuzione<span class="star"></span> <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
+    <th data-k="s:5" data-num title="1★→5★ chiaro→scuro; larghezze ∝ quota di voti; ▼ il voto medio, con la barra letta come scala da 1 a 5; il clic ordina per quota di 5★, le altre stelle stanno nel pannello dell'ordinamento">Distribuzione<span class="star"></span> <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num>Stagioni</th>
     <th data-k="episodes" data-num>Episodi</th>
@@ -330,7 +332,7 @@
       <td class="num">${r.lcb.toFixed(3)}</td>
       <td class="num">${r.rating.toFixed(3)}</td>
       <td class="num">${fmt.format(r.votes)}</td>
-      <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => `<span style="flex:${Math.sqrt(s.pct)} 0 0;background:var(--s${i + 1})"></span>`).join("")}</div></td>
+      <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>`).join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div></td>
       <td class="num">${r.year ?? ""}</td>
       <td class="num">${r.seasons}</td>
       <td class="num">${r.episodes}</td>
