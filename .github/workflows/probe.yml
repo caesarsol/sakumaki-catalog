@@ -16,4 +16,3 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - run: gh workflow run watchlist.yml --ref main -R ${{ github.repository }}
-      - run: gh workflow run ratings.yml --ref main -R ${{ github.repository }}
