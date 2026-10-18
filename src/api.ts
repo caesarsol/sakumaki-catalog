@@ -128,6 +128,18 @@ export async function fetchBookmarks(token: Token, locale = "en-US"): Promise<{ 
   return items;
 }
 
+/** Una chiamata CMS (stagioni, puntate) con il token dell'account: risponde in un decimo di secondo, è roba in cache. */
+export async function cms<T>(token: AnonToken, path: string, locale = "en-US"): Promise<T[]> {
+  const url = new URL(`${BASE}/content/v2/cms/${path}`);
+  url.search = new URLSearchParams({ locale }).toString();
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
+  });
+  if (!res.ok) throw new Error(`cms failed: ${res.status}`);
+  return ((await res.json()) as { data: T[] }).data;
+}
+
 type StarBucket = { displayed: string; unit: string; percentage: number };
 export type Rating = Record<"1s" | "2s" | "3s" | "4s" | "5s", StarBucket> & {
   average: string;

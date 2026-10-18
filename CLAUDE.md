@@ -56,6 +56,10 @@ La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il gi
   la puntata a cui riprendere (`panel`, da cui `watchlist-progress.ts` prende `episode_metadata.series_id`)
   e serve solo per la colonna Puntata e per le puntate viste. Una voce discover senza segnalibro è un
   sostituto (vedi sotto) e resta fuori; una serie col segnalibro e senza voce discover entra senza puntata.
+- Le barrette sotto il titolo sono le puntate; quelle viste, in arancio, le conta `watchlist-position.ts`
+  per le serie in watchlist: tutte quelle prima della puntata da cui riprendere, più quella se è finita.
+  Conta sulla lista delle puntate (stagioni per `season_sequence_number`, indice nella stagione), non sui
+  numeri del pannello, che saltano. Due chiamate CMS per serie, qualche minuto a ogni run.
 - Il catalogo è il browse con `type=series`: **i film non ci sono**. Sul servizio un film è una serie
   con un episodio solo, con un suo `series_id` che il browse non elenca, e la voce di watchlist resta
   senza riga. Il deploy elenca nel log le voci senza riga in catalogo con id, tipo e titolo. Il tipo è

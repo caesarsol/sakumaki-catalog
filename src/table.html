@@ -80,7 +80,16 @@
      Un gradiente e non un elemento per puntata: le serie lunghe ne hanno più di mille. Sotto i 3px per
      puntata lo spazio fra le barrette sparirebbe in un tremolio, e la striscia diventa piena (--gap: 0px). */
   .eps { height: 0; }
-  .eps .full { position: relative; top: 2px; height: 3px; background: repeating-linear-gradient(to right, var(--ep) 0 calc(100% / var(--n) - var(--gap)), transparent 0 calc(100% / var(--n))); }
+  /* Due strati con la stessa trama: sopra le puntate viste in arancio, tagliato a k puntate con background-size,
+     sotto tutte in grigio. Il passo è assoluto (larghezza della striscia / n) e non in percentuale, perché uno
+     strato ridimensionato misurerebbe le percentuali sulla propria larghezza e le barrette non coinciderebbero. */
+  .eps .full {
+    --seg: calc((var(--title-w) - var(--cell-pad)) / var(--n));
+    position: relative; top: 2px; height: 3px; background-repeat: no-repeat;
+    background-image: repeating-linear-gradient(to right, var(--accent) 0 calc(var(--seg) - var(--gap)), transparent 0 var(--seg)),
+                      repeating-linear-gradient(to right, var(--ep) 0 calc(var(--seg) - var(--gap)), transparent 0 var(--seg));
+    background-size: calc(var(--seg) * var(--k)) 100%, 100% 100%;
+  }
   :root { --ep: #dcd6ce; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
@@ -234,6 +243,13 @@
   const watchlistTitle = (r) =>
     !r.in_watchlist ? "non in watchlist"
     : [r.wl_fav ? "preferita" : "in watchlist", episodeLabel(r), r.wl_watched ? "puntata finita" : r.wl_new ? "mai iniziata" : "iniziata"].filter(Boolean).join(" · ");
+  /** Le puntate sotto il titolo; per le serie in watchlist il totale e le viste vengono da watchlist-progress.ts, che le conta sulla stessa lista di puntate. */
+  const epsStrip = (r) => {
+    const n = r.ep_total || r.episodes, k = Math.min(r.ep_done || 0, n);
+    if (!n) return "";
+    const tip = r.ep_total ? `${k} viste su ${n} puntate` : `${n} puntate`;
+    return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
+  };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   /* ---- filtri multi-selezione a tre stati -------------------------------------------------
@@ -341,7 +357,7 @@
       (wl !== "in" || r.in_watchlist) && (wl !== "out" || !r.in_watchlist));
     visible.sort(compare);
     $("rows").innerHTML = visible.map((r) => `<tr>
-      <td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${r.episodes ? `<div class="peek eps"><div class="full" style="--n:${r.episodes};--gap:${r.episodes > 110 ? 0 : 1}px" title="${r.episodes} puntate"></div></div>` : ""}</td>
+      <td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>
       <td class="num">${r.weighted.toFixed(3)}</td>
       <td class="num">${r.lcb.toFixed(3)}</td>
       <td class="num">${r.rating.toFixed(3)}</td>

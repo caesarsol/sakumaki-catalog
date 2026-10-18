@@ -1,4 +1,5 @@
 import type { WatchlistItem } from "./api";
+import type { Position } from "./watchlist-position";
 
 /**
  * L'avanzamento personale che finisce nella tabella, una voce per serie: la puntata a cui sei
@@ -17,6 +18,9 @@ export type Progress = {
   fully_watched: boolean;
   never_watched: boolean;
   is_favorite: boolean;
+  // puntate viste e totali, contate da watchlist-position.ts; assenti se non si è riusciti a contarle
+  ep_done?: number;
+  ep_total?: number;
 };
 
 /**
@@ -28,6 +32,7 @@ export type Progress = {
 export function progressBySeries(
   data: WatchlistItem[],
   bookmarks?: { id: string; is_favorite: boolean }[],
+  positions: Record<string, Position> = {},
 ): Record<string, Progress> {
   const marked = bookmarks && new Map(bookmarks.map((b) => [b.id, b]));
   const out: Record<string, Progress> = {};
@@ -43,6 +48,7 @@ export function progressBySeries(
       fully_watched: w.fully_watched,
       never_watched: w.never_watched,
       is_favorite: marked?.get(ep.series_id)?.is_favorite ?? w.is_favorite,
+      ...(positions[ep.series_id] && { ep_done: positions[ep.series_id].done, ep_total: positions[ep.series_id].total }),
     };
   }
   for (const b of bookmarks ?? []) {
@@ -60,9 +66,9 @@ export function progressBySeries(
  */
 if (import.meta.main) {
   const dataDir = `${import.meta.dir}/../data`;
-  const { data, bookmarks }: { data: WatchlistItem[]; bookmarks?: { id: string; is_favorite: boolean }[] } =
+  const { data, bookmarks, positions }: { data: WatchlistItem[]; bookmarks?: { id: string; is_favorite: boolean }[]; positions?: Record<string, Position> } =
     await Bun.file(`${dataDir}/watchlist.json`).json();
-  const progress = progressBySeries(data, bookmarks);
+  const progress = progressBySeries(data, bookmarks, positions);
   const out = `${dataDir}/watchlist-progress.json`;
   await Bun.write(out, JSON.stringify(progress));
   const v = Object.values(progress);
@@ -71,6 +77,6 @@ if (import.meta.main) {
   console.log(
     `${v.length} serie salvate in ${out}: ${n((p) => p.fully_watched)} con la puntata finita, ` +
       `${n((p) => p.never_watched)} mai iniziate, ${n((p) => !p.fully_watched && !p.never_watched && p.season >= 0)} a metà, ` +
-      `${n((p) => p.season < 0)} col segnalibro ma fuori dalla lista discover, ${n((p) => p.is_favorite)} preferite`,
+      `${n((p) => p.season < 0)} col segnalibro ma fuori dalla lista discover, ${n((p) => p.is_favorite)} preferite, ${n((p) => p.ep_total != null)} con le puntate contate`,
   );
 }

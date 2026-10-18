@@ -35,7 +35,7 @@ const missing = Object.entries(progress).filter(([id]) => !catalogIds.has(id));
 if (missing.length) {
   console.log(`${missing.length} voci di watchlist senza riga in catalogo:`);
   // Titolo e tipo mancano negli artifact prodotti prima di questa modifica: il primo deploy dopo il merge usa ancora uno di quelli.
-  for (const [id, p] of missing) console.log(`  ${id}  ${(p.type ?? "?").padEnd(8)} ${p.title ?? "(titolo non disponibile)"}`);
+  for (const [id, p] of missing) console.log(`  ${id}  ${(p.type ?? "?").padEnd(8)} ${p.title || "(titolo non disponibile)"}`);
 }
 
 /** Media e deviazione standard dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
@@ -123,6 +123,8 @@ const rows = top.map((s) => ({
   wl_watched: progress[s.id]?.fully_watched ?? false,
   wl_new: progress[s.id]?.never_watched ?? false,
   wl_fav: progress[s.id]?.is_favorite ?? false,
+  ep_done: progress[s.id]?.ep_done ?? 0,
+  ep_total: progress[s.id]?.ep_total ?? 0,
   countries: s.countries,
 }));
 const template = await Bun.file(`${import.meta.dir}/table.html`).text();
