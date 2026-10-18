@@ -16,5 +16,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - run: gh run download "$(gh run list -R ${{ github.repository }} --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" -R ${{ github.repository }} --name watchlist --dir data
-      - run: jq -c 'to_entries[] | select(.value.title | test("GTO|DAN DA DAN|Shangri"; "i"))' data/watchlist-progress.json
-      - run: jq -r '[.[]] | "con ep_total: \([.[]|select(.ep_total)]|length); finite ma ep_done 0: \([.[]|select(.fully_watched and (.ep_done//0)==0)]|length)"' data/watchlist-progress.json
+      - run: |
+          jq -c 'to_entries[] | select(.value.title | test("GTO|DAN DA DAN|Shangri"; "i"))' data/watchlist-progress.json
+      - run: |
+          jq -r '[.[]] | "con ep_total: \([.[]|select(.ep_total)]|length); finite ma ep_done 0: \([.[]|select(.fully_watched and (.ep_done//0)==0)]|length)"' data/watchlist-progress.json
