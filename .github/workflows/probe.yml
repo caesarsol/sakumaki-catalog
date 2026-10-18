@@ -1,6 +1,6 @@
 name: probe
 
-# Temporaneo, su un ramo da cancellare: sonda dell'API per watchlist, posizione delle puntate e voti esterni.
+# Temporaneo, su un ramo da cancellare: lancia i workflow su main, che via MCP non si possono lanciare.
 on:
   push:
     branches: [claude/probe-tmp]
@@ -10,18 +10,10 @@ permissions:
   actions: write
 
 jobs:
-  probe:
+  dispatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
     env:
-      AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
-      API_BASE: ${{ secrets.API_BASE }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: gh workflow run catalog.yml --ref main
-        continue-on-error: true
-      - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data
-      - run: bun run src/probe.ts
+      - run: gh workflow run watchlist.yml --ref main -R ${{ github.repository }}
+      - run: gh workflow run ratings.yml --ref main -R ${{ github.repository }}
