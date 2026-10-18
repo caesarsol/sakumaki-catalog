@@ -17,6 +17,8 @@ jobs:
     env:
       AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
       API_BASE: ${{ secrets.API_BASE }} # gli host sono secret, non variabili: nei log pubblici vengono mascherati
+      NORD_USER: ${{ secrets.NORD_USER }} # proxy NordVPN italiano: dal runner l'API vedrebbe gli USA e perderebbe le serie non disponibili là
+      NORD_PASS: ${{ secrets.NORD_PASS }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

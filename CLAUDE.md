@@ -41,7 +41,7 @@ stanno in JSON dentro `<script id="data">`: da lì si legge tutto, id e stato wa
 | workflow | quando | cosa fa |
 |---|---|---|
 | `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN → artifact `catalog`, poi lancia `watchlist.yml` |
-| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account → artifact `watchlist`, poi lancia `deploy.yml` |
+| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN → artifact `watchlist`, poi lancia `deploy.yml` |
 | `ratings.yml` | a fine catalog | voti AniList e MAL abbinati per id alle serie → artifact `ratings`, poi lancia `deploy.yml` |
 | `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | scarica gli artifact, genera la pagina, pubblica su Pages |
 

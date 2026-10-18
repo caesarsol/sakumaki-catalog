@@ -12,6 +12,12 @@ const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 /** Timeout per ogni richiesta: senza, una connessione appesa blocca il run finché GHA non lo uccide. */
 export const REQUEST_TIMEOUT_MS = 30_000;
+/**
+ * Proxy per tutte le chiamate che non ne passano uno loro. Il servizio risponde secondo il paese dell'IP:
+ * la watchlist dal runner di Actions (USA) perde le serie non disponibili là, quindi la si legge dall'Italia.
+ */
+let defaultProxy: string | undefined;
+export const setDefaultProxy = (proxy?: string) => void (defaultProxy = proxy);
 /** Pausa casuale di 2–5 s fra due chiamate, per non martellare l'API. */
 export const pause = () => Bun.sleep(2000 + Math.random() * 3000);
 
@@ -44,7 +50,7 @@ export type WatchlistItem = {
 async function tokenRequest(grant_type: string, extraHeaders: Record<string, string>, proxy?: string) {
   const res = await fetch(`${BASE}/auth/v1/token`, {
     method: "POST",
-    proxy,
+    proxy: proxy ?? defaultProxy,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       Authorization: `Basic ${WEB_CLIENT_BASIC}`,
@@ -86,6 +92,7 @@ export async function fetchWatchlist(token: Token, locale = "en-US"): Promise<Wa
       locale,
     }).toString();
     const res = await fetch(url, {
+      proxy: defaultProxy,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
     });
@@ -115,6 +122,7 @@ export async function fetchBookmarks(token: Token, locale = "en-US"): Promise<{ 
     const url = new URL(`${BASE}/content/v2/${token.account_id}/watchlist`);
     url.search = new URLSearchParams({ n: "1000", start: String(start), locale }).toString();
     const res = await fetch(url, {
+      proxy: defaultProxy,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
     });
@@ -133,6 +141,7 @@ export async function cms<T>(token: AnonToken, path: string, locale = "en-US"): 
   const url = new URL(`${BASE}/content/v2/cms/${path}`);
   url.search = new URLSearchParams({ locale }).toString();
   const res = await fetch(url, {
+    proxy: defaultProxy,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
   });
@@ -145,6 +154,7 @@ export async function fetchPlayheads(token: Token, ids: string[], locale = "en-U
   const url = new URL(`${BASE}/content/v2/${token.account_id}/playheads`);
   url.search = new URLSearchParams({ content_ids: ids.join(","), locale }).toString();
   const res = await fetch(url, {
+    proxy: defaultProxy,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
   });
@@ -184,6 +194,7 @@ export async function fetchObjects(token: AnonToken, ids: string[], locale = "en
   const url = new URL(`${BASE}/content/v2/cms/objects/${ids.join(",")}`);
   url.search = new URLSearchParams({ ratings: "true", locale }).toString();
   const res = await fetch(url, {
+    proxy: defaultProxy,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
   });
@@ -207,7 +218,7 @@ export async function fetchCatalog(token: AnonToken, locale = "en-US", proxy?: s
       locale,
     }).toString();
     const res = await fetch(url, {
-      proxy,
+      proxy: proxy ?? defaultProxy,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
     });
