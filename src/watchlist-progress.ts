@@ -18,10 +18,13 @@ export type Progress = {
   fully_watched: boolean;
   never_watched: boolean;
   is_favorite: boolean;
-  // puntate viste e totali, contate da watchlist-position.ts; assenti se non si è riusciti a contarle
+  // puntate viste e totali, e se la successiva è iniziata, da watchlist-position.ts; assenti se non si è riusciti a contarle
   ep_done?: number;
   ep_total?: number;
+  ep_started?: boolean;
 };
+
+const fromPosition = (p?: Position) => (p ? { ep_done: p.done, ep_total: p.total, ep_started: p.started } : {});
 
 /**
  * Le serie in watchlist sono quelle con il segnalibro. Una voce della lista discover senza segnalibro è il
@@ -48,12 +51,12 @@ export function progressBySeries(
       fully_watched: w.fully_watched,
       never_watched: w.never_watched,
       is_favorite: marked?.get(ep.series_id)?.is_favorite ?? w.is_favorite,
-      ...(positions[ep.series_id] && { ep_done: positions[ep.series_id].done, ep_total: positions[ep.series_id].total }),
+      ...fromPosition(positions[ep.series_id]),
     };
   }
   for (const b of bookmarks ?? []) {
     if (out[b.id]) continue;
-    out[b.id] = { title: "", type: "bookmark", season: -1, episode: null, fully_watched: false, never_watched: false, is_favorite: b.is_favorite };
+    out[b.id] = { title: "", type: "bookmark", season: -1, episode: null, fully_watched: false, never_watched: false, is_favorite: b.is_favorite, ...fromPosition(positions[b.id]) };
   }
   return out;
 }

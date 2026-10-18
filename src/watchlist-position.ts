@@ -1,4 +1,4 @@
-import { cms, type AnonToken, type WatchlistItem } from "./api";
+import { cms, fetchPlayheads, type Token, type WatchlistItem } from "./api";
 
 /**
  * Quante puntate di una serie hai visto, contate sulla lista delle sue puntate: tutte quelle prima della
@@ -15,11 +15,12 @@ import { cms, type AnonToken, type WatchlistItem } from "./api";
  */
 type Season = { id: string; season_sequence_number: number; number_of_episodes: number; versions?: { guid: string }[] | null };
 type Episode = { id: string; versions?: { guid: string }[] | null };
-export type Position = { done: number; total: number };
+// started: la puntata dopo le `done` è iniziata e non finita, e nella pagina è mezza barretta
+export type Position = { done: number; total: number; started: boolean };
 
 const CMS_PAUSE_MS = 250;
 
-async function position(token: AnonToken, w: WatchlistItem): Promise<Position | string> {
+async function position(token: Token, w: WatchlistItem): Promise<Position | string> {
   const ep = w.panel.episode_metadata as (WatchlistItem["panel"]["episode_metadata"] & { season_id: string; season_sequence_number: number }) | undefined;
   if (!ep) return "senza metadati";
   const seasons = (await cms<Season>(token, `series/${ep.series_id}/seasons`)).sort((a, b) => a.season_sequence_number - b.season_sequence_number);
@@ -36,22 +37,65 @@ async function position(token: AnonToken, w: WatchlistItem): Promise<Position | 
   const j = episodes.findIndex((e) => e.id === w.panel.id || e.versions?.some((v) => v.guid === w.panel.id));
   if (j < 0) return "puntata non trovata";
   const before = seasons.slice(0, i).reduce((acc, s) => acc + s.number_of_episodes, 0);
-  return { done: Math.min(total, before + j + (w.fully_watched ? 1 : 0)), total };
+  const done = Math.min(total, before + j + (w.fully_watched ? 1 : 0));
+  return { done, total, started: done < total && !w.fully_watched && !w.never_watched };
 }
 
-/** Le posizioni per serie; una serie che non si riesce a contare resta fuori, e nella pagina avrà solo le barrette grigie. */
-export async function episodePositions(token: () => Promise<AnonToken>, items: WatchlistItem[]): Promise<Record<string, Position>> {
+/**
+ * La stessa posizione senza pannello, per le serie col segnalibro che la lista discover non dà o dà con il
+ * film o recap che le segue (Bocchi, finita, compare come "Recap Part 2"): tutte le puntate della serie in
+ * ordine, e il loro stato di visione chiesto in blocco. L'ultima puntata toccata fa da puntata da cui
+ * riprendere, e quelle prima si danno per viste come nell'altro caso. Una chiamata per stagione più una
+ * ogni 100 id: si usa solo dove serve.
+ */
+async function positionFromPlayheads(token: Token, seriesId: string): Promise<Position | string> {
+  const seasons = (await cms<Season>(token, `series/${seriesId}/seasons`)).sort((a, b) => a.season_sequence_number - b.season_sequence_number);
+  const episodes: string[][] = []; // per ogni puntata, i suoi id: quello principale e quelli delle versioni
+  for (const s of seasons) {
+    await Bun.sleep(CMS_PAUSE_MS);
+    for (const e of await cms<Episode>(token, `seasons/${s.id}/episodes`)) episodes.push([e.id, ...(e.versions ?? []).map((v) => v.guid)]);
+  }
+  if (!episodes.length) return "nessuna puntata";
+  const state = new Map<string, { playhead: number; fully_watched: boolean }>();
+  const ids = [...new Set(episodes.flat())];
+  for (let i = 0; i < ids.length; i += 100) {
+    await Bun.sleep(CMS_PAUSE_MS);
+    for (const p of await fetchPlayheads(token, ids.slice(i, i + 100))) state.set(p.content_id, p);
+  }
+  const touched = (ep: string[]) => ep.map((id) => state.get(id)).filter((p) => p && (p.fully_watched || p.playhead > 0));
+  const last = episodes.findLastIndex((ep) => touched(ep).length > 0);
+  if (last < 0) return { done: 0, total: episodes.length, started: false };
+  const finished = touched(episodes[last]).some((p) => p!.fully_watched);
+  return { done: last + (finished ? 1 : 0), total: episodes.length, started: !finished };
+}
+
+/**
+ * Le posizioni per serie: dal pannello per le voci discover, dai playhead per le serie col segnalibro senza
+ * voce (`extra`) e per quelle il cui pannello non si riesce a collocare. Una serie che non si riesce a contare
+ * resta fuori, e nella pagina avrà solo le barrette grigie.
+ */
+export async function episodePositions(token: () => Promise<Token>, items: WatchlistItem[], extra: string[] = []): Promise<Record<string, Position>> {
   const out: Record<string, Position> = {};
   const failed: Record<string, number> = {};
   const t0 = Date.now();
   for (const w of items) {
     const id = w.panel.episode_metadata?.series_id;
     if (!id || out[id]) continue;
-    const p = await position(await token(), w).catch((e: Error) => e.message);
+    let p = await position(await token(), w).catch((e: Error) => e.message);
+    if (typeof p === "string") p = await positionFromPlayheads(await token(), id).catch((e: Error) => e.message);
     if (typeof p === "string") failed[p] = (failed[p] ?? 0) + 1;
     else out[id] = p;
     await Bun.sleep(CMS_PAUSE_MS);
   }
+  let fromPlayheads = 0;
+  for (const id of extra) {
+    if (out[id]) continue;
+    const p = await positionFromPlayheads(await token(), id).catch((e: Error) => e.message);
+    if (typeof p === "string") failed[`segnalibro: ${p}`] = (failed[`segnalibro: ${p}`] ?? 0) + 1;
+    else (out[id] = p), fromPlayheads++;
+    await Bun.sleep(CMS_PAUSE_MS);
+  }
+  console.log(`serie col segnalibro e senza voce discover contate dai playhead: ${fromPlayheads} su ${extra.length}`);
   console.log(`puntate viste: ${Object.keys(out).length} serie contate in ${Math.round((Date.now() - t0) / 1000)} s; non contate: ${JSON.stringify(failed)}`);
   return out;
 }

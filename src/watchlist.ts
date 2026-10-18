@@ -15,7 +15,12 @@ const current = async () => {
   if (Date.now() - fresh.at > (fresh.token.expires_in - 60) * 1000) fresh = { token: await login(etpRt), at: Date.now() };
   return fresh.token;
 };
-const positions = await episodePositions(current, data.filter((w) => marked.has(w.panel.episode_metadata?.series_id ?? "")));
+const inDiscover = new Set(data.map((w) => w.panel.episode_metadata?.series_id));
+const positions = await episodePositions(
+  current,
+  data.filter((w) => marked.has(w.panel.episode_metadata?.series_id ?? "")),
+  bookmarks.map((b) => b.id).filter((id) => !inDiscover.has(id)),
+);
 const out = `${import.meta.dir}/../data/watchlist.json`;
 await Bun.write(out, JSON.stringify({ fetched_at: new Date().toISOString(), total: data.length, data, bookmarks, positions }, null, 2));
 console.log(`${data.length} titoli e ${bookmarks.length} segnalibri salvati in ${out}`);

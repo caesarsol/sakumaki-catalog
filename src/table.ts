@@ -129,6 +129,7 @@ const rows = top.map((s) => ({
   wl_fav: progress[s.id]?.is_favorite ?? false,
   ep_done: progress[s.id]?.ep_done ?? 0,
   ep_total: progress[s.id]?.ep_total ?? 0,
+  ep_started: progress[s.id]?.ep_started ?? false,
   countries: s.countries,
   // -1 nessun abbinamento, -2 voti esterni non scaricati: numeri e non null per l'ordinamento, come wl_season
   al: external ? external.series[s.id]?.al?.score ?? -1 : -2,

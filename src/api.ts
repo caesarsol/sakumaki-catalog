@@ -140,6 +140,18 @@ export async function cms<T>(token: AnonToken, path: string, locale = "en-US"): 
   return ((await res.json()) as { data: T[] }).data;
 }
 
+/** Stato di visione di singole puntate (id della puntata o di una sua versione): restituisce solo quelle toccate. */
+export async function fetchPlayheads(token: Token, ids: string[], locale = "en-US"): Promise<{ content_id: string; playhead: number; fully_watched: boolean }[]> {
+  const url = new URL(`${BASE}/content/v2/${token.account_id}/playheads`);
+  url.search = new URLSearchParams({ content_ids: ids.join(","), locale }).toString();
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
+  });
+  if (!res.ok) throw new Error(`playheads failed: ${res.status}`);
+  return ((await res.json()) as { data: { content_id: string; playhead: number; fully_watched: boolean }[] }).data ?? [];
+}
+
 type StarBucket = { displayed: string; unit: string; percentage: number };
 export type Rating = Record<"1s" | "2s" | "3s" | "4s" | "5s", StarBucket> & {
   average: string;

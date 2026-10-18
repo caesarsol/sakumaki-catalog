@@ -253,8 +253,7 @@
   const epsStrip = (r) => {
     const n = r.ep_total || r.episodes, k = Math.min(r.ep_done || 0, n);
     if (!n) return "";
-    // la puntata da cui riprendere è iniziata quando non è né finita né mai cominciata
-    const half = r.ep_total && k < n && !r.wl_watched && !r.wl_new ? 1 : 0;
+    const half = r.ep_started && k < n ? 1 : 0; // la puntata dopo le viste è iniziata e non finita
     const tip = r.ep_total ? `${k} viste su ${n} puntate${half ? `, la ${k + 1}ª iniziata` : ""}` : `${n} puntate`;
     return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--half:${half};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
   };
