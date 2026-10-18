@@ -131,11 +131,14 @@ const rows = top.map((s) => ({
   ep_total: progress[s.id]?.ep_total ?? 0,
   ep_started: progress[s.id]?.ep_started ?? false,
   countries: s.countries,
-  // -1 nessun abbinamento, -2 voti esterni non scaricati: numeri e non null per l'ordinamento, come wl_season
-  al: external ? external.series[s.id]?.al?.score ?? -1 : -2,
+  // Sulla scala 0–5 del servizio per confrontarli a colpo d'occhio: AniList è in centesimi, MAL in decimi.
+  // -1 nessun abbinamento, -2 voti esterni non scaricati: numeri e non null per l'ordinamento, come wl_season.
+  al: external ? round3((external.series[s.id]?.al?.score ?? -20) / 20) : -2,
+  al_raw: external?.series[s.id]?.al?.score ?? null,
   al_votes: external?.series[s.id]?.al?.votes ?? 0,
   al_n: external?.series[s.id]?.al?.entries ?? 0,
-  mal: external?.mal_available ? external.series[s.id]?.mal?.score ?? -1 : -2,
+  mal: external?.mal_available ? round3((external.series[s.id]?.mal?.score ?? -2) / 2) : -2,
+  mal_raw: external?.series[s.id]?.mal?.score ?? null,
   mal_votes: external?.series[s.id]?.mal?.votes ?? 0,
   mal_n: external?.series[s.id]?.mal?.entries ?? 0,
 }));

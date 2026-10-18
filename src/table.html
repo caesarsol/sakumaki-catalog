@@ -223,8 +223,8 @@
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
     <th data-k="votes" data-num>Votanti</th>
     <th data-k="s:5" data-num title="1★→5★ chiaro→scuro; larghezze ∝ quota di voti; ▼ il voto medio, con la barra letta come scala da 1 a 5; il clic ordina per quota di 5★, le altre stelle stanno nel pannello dell'ordinamento">Distribuzione<span class="star"></span> <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
-    <th data-k="al" data-num title="voto medio su AniList, 0–100: media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">AniList</th>
-    <th data-k="mal" data-num title="voto su MyAnimeList, 1–10: media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">MAL</th>
+    <th data-k="al" data-num title="voto su AniList portato sulla scala 0–5 (centesimi / 20): media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">V AniList</th>
+    <th data-k="mal" data-num title="voto su MyAnimeList portato sulla scala 0–5 (decimi / 2): media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">V MAL</th>
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num>Stagioni</th>
     <th data-k="episodes" data-num>Episodi</th>
@@ -275,11 +275,11 @@
   // Una quota che nella barra (9rem, 144px) varrebbe meno di un pixel non si vedrebbe, ma il suo spazio da 1px sì,
   // e sembrerebbe una stella con dei voti: la si toglie con il suo spazio. Resta nel suggerimento al passaggio.
   const MIN_PCT = 100 / 144;
-  /** Voto esterno: il numero, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
-  const extCell = (score, votes, n, site, digits) =>
+  /** Voto esterno sulla scala 0–5: il numero, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
+  const extCell = (score, raw, scale, votes, n, site) =>
     score === -2 ? `<td></td>`
     : score < 0 ? `<td class="num nomatch" title="nessuna voce di ${site} abbinata">✗</td>`
-    : `<td class="num" title="${site}: ${score} · ${fmt.format(votes)} votanti · ${n} ${n === 1 ? "voce" : "voci (stagioni o film)"}">${score.toFixed(digits)}</td>`;
+    : `<td class="num" title="${site}: ${raw}/${scale} · ${fmt.format(votes)} votanti · ${n} ${n === 1 ? "voce" : "voci (stagioni o film)"}">${score.toFixed(2)}</td>`;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   /* ---- filtri multi-selezione a tre stati -------------------------------------------------
@@ -411,8 +411,8 @@
     (r) => `<td class="num">${r.rating.toFixed(3)}</td>`,
     (r) => `<td class="num">${fmt.format(r.votes)}</td>`,
     (r) => `<td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="dist"><div class="bar">${r.stars.map((s, i) => s.pct >= MIN_PCT ? `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>` : "").join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div><small>${distStar && r.votes ? `${r.stars[distStar - 1].pct.toFixed(1)}%` : ""}</small></div></td>`,
-    (r) => extCell(r.al, r.al_votes, r.al_n, "AniList", 0),
-    (r) => extCell(r.mal, r.mal_votes, r.mal_n, "MAL", 2),
+    (r) => extCell(r.al, r.al_raw, 100, r.al_votes, r.al_n, "AniList"),
+    (r) => extCell(r.mal, r.mal_raw, 10, r.mal_votes, r.mal_n, "MAL"),
     (r) => `<td class="num">${r.year ?? ""}</td>`,
     (r) => `<td class="num">${r.seasons}</td>`,
     (r) => `<td class="num">${r.episodes}</td>`,
