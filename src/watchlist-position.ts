@@ -1,4 +1,4 @@
-import { cms, type Token, type WatchlistItem } from "./api";
+import { cms, type AnonToken, type WatchlistItem } from "./api";
 
 /**
  * Quante puntate di una serie hai visto, contate sulla lista delle sue puntate: tutte quelle prima della
@@ -10,7 +10,8 @@ import { cms, type Token, type WatchlistItem } from "./api";
  * stagioni 1 e 3, Hakuoki la 101) e `sequence_number` non conta gli speciali in testa alla stagione. Le
  * stagioni in ordine di `season_sequence_number`, con il loro numero di puntate, e l'indice della puntata
  * nella sua stagione sono invece esatti, e la somma delle stagioni coincide con `episode_count` del catalogo.
- * Due chiamate CMS per serie, un decimo di secondo l'una.
+ * Due chiamate CMS per serie, un decimo di secondo l'una: in tutto più dei 5 minuti di vita del token,
+ * per questo il token lo chiede ogni volta a `token()`, che lo rinnova quando serve.
  */
 type Season = { id: string; season_sequence_number: number; number_of_episodes: number; versions?: { guid: string }[] | null };
 type Episode = { id: string; versions?: { guid: string }[] | null };
@@ -18,7 +19,7 @@ export type Position = { done: number; total: number };
 
 const CMS_PAUSE_MS = 250;
 
-async function position(token: Token, w: WatchlistItem): Promise<Position | string> {
+async function position(token: AnonToken, w: WatchlistItem): Promise<Position | string> {
   const ep = w.panel.episode_metadata as (WatchlistItem["panel"]["episode_metadata"] & { season_id: string; season_sequence_number: number }) | undefined;
   if (!ep) return "senza metadati";
   const seasons = (await cms<Season>(token, `series/${ep.series_id}/seasons`)).sort((a, b) => a.season_sequence_number - b.season_sequence_number);
@@ -39,14 +40,14 @@ async function position(token: Token, w: WatchlistItem): Promise<Position | stri
 }
 
 /** Le posizioni per serie; una serie che non si riesce a contare resta fuori, e nella pagina avrà solo le barrette grigie. */
-export async function episodePositions(token: Token, items: WatchlistItem[]): Promise<Record<string, Position>> {
+export async function episodePositions(token: () => Promise<AnonToken>, items: WatchlistItem[]): Promise<Record<string, Position>> {
   const out: Record<string, Position> = {};
   const failed: Record<string, number> = {};
   const t0 = Date.now();
   for (const w of items) {
     const id = w.panel.episode_metadata?.series_id;
     if (!id || out[id]) continue;
-    const p = await position(token, w).catch((e: Error) => e.message);
+    const p = await position(await token(), w).catch((e: Error) => e.message);
     if (typeof p === "string") failed[p] = (failed[p] ?? 0) + 1;
     else out[id] = p;
     await Bun.sleep(CMS_PAUSE_MS);
