@@ -55,19 +55,22 @@ async function post(query: string, variables: object): Promise<any> {
       await Bun.sleep(Number(res.headers.get("retry-after") ?? 60) * 1000 + 1000);
       continue;
     }
-    if (!res.ok) throw new Error(`AniList: HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`AniList: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`); // il corpo è l'errore GraphQL, niente di privato
     return (await res.json()).data;
   }
 }
 
-// Tutti gli anime di AniList, in ordine di id: l'API non sa filtrare per link esterno.
-const ANIME = `query ($page: Int) { Page(page: $page, perPage: 50) { pageInfo { hasNextPage lastPage }
-  media(type: ANIME, sort: ID) { id idMal meanScore stats { scoreDistribution { amount } } externalLinks { url } } } }`;
+// Tutti gli anime di AniList, in ordine di id: l'API non sa filtrare per link esterno. Si avanza per id
+// e non per numero di pagina, perché oltre i 5000 risultati di una stessa query (pagina 100) risponde 400.
+const ANIME = `query ($after: Int) { Page(page: 1, perPage: 50) {
+  media(type: ANIME, sort: ID, id_greater: $after) { id idMal meanScore stats { scoreDistribution { amount } } externalLinks { url } } } }`;
 const matched = new Map<string, Entry[]>();
 let pages = 0;
-for (let page = 1; ; page++) {
-  const { Page } = await post(ANIME, { page });
+for (let after = 0; ; ) {
+  const { Page } = await post(ANIME, { after });
   pages++;
+  if (!Page.media.length) break;
+  after = Page.media.at(-1).id;
   for (const m of Page.media) {
     const series = m.externalLinks.map((l: { url: string }) => seriesOf(l.url)).find(Boolean);
     if (!series) continue;
@@ -75,8 +78,7 @@ for (let page = 1; ; page++) {
     if (!matched.has(series)) matched.set(series, []);
     matched.get(series)!.push({ id: m.id, idMal: m.idMal, meanScore: m.meanScore, votes });
   }
-  if (page % 50 === 0) console.log(`AniList: ${page}/${Page.pageInfo.lastPage} pagine, ${matched.size} serie abbinate`);
-  if (!Page.pageInfo.hasNextPage) break;
+  if (pages % 50 === 0) console.log(`AniList: ${pages} pagine, fino all'id ${after}, ${matched.size} serie abbinate`);
   await Bun.sleep(ANILIST_PAUSE_MS);
 }
 
