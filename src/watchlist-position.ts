@@ -12,24 +12,28 @@ import { cms, type Token, type WatchlistItem } from "./api";
  * nella sua stagione sono invece esatti, e la somma delle stagioni coincide con `episode_count` del catalogo.
  * Due chiamate CMS per serie, un decimo di secondo l'una.
  */
-type Season = { id: string; season_sequence_number: number; number_of_episodes: number };
+type Season = { id: string; season_sequence_number: number; number_of_episodes: number; versions?: { guid: string }[] | null };
 type Episode = { id: string; versions?: { guid: string }[] | null };
 export type Position = { done: number; total: number };
 
 const CMS_PAUSE_MS = 250;
 
-async function position(token: Token, w: WatchlistItem): Promise<Position | null> {
-  const ep = w.panel.episode_metadata as (WatchlistItem["panel"]["episode_metadata"] & { season_id: string }) | undefined;
-  if (!ep) return null;
+async function position(token: Token, w: WatchlistItem): Promise<Position | string> {
+  const ep = w.panel.episode_metadata as (WatchlistItem["panel"]["episode_metadata"] & { season_id: string; season_sequence_number: number }) | undefined;
+  if (!ep) return "senza metadati";
   const seasons = (await cms<Season>(token, `series/${ep.series_id}/seasons`)).sort((a, b) => a.season_sequence_number - b.season_sequence_number);
   const total = seasons.reduce((acc, s) => acc + s.number_of_episodes, 0);
-  const i = seasons.findIndex((s) => s.id === ep.season_id);
-  if (i < 0) return null;
+  // Il pannello porta l'id della stagione nella versione che stai guardando (di solito la giapponese,
+  // "…JAJP"), l'elenco dà la stagione principale con le altre versioni in `versions`; di riserva il
+  // numero d'ordine, che il pannello ha uguale.
+  let i = seasons.findIndex((s) => s.id === ep.season_id || s.versions?.some((v) => v.guid === ep.season_id));
+  if (i < 0) i = seasons.findIndex((s) => s.season_sequence_number === ep.season_sequence_number);
+  if (i < 0) return "stagione non trovata";
   await Bun.sleep(CMS_PAUSE_MS);
   // Il pannello può essere una versione doppiata della puntata: la si riconosce fra le versioni.
   const episodes = await cms<Episode>(token, `seasons/${ep.season_id}/episodes`);
   const j = episodes.findIndex((e) => e.id === w.panel.id || e.versions?.some((v) => v.guid === w.panel.id));
-  if (j < 0) return null;
+  if (j < 0) return "puntata non trovata";
   const before = seasons.slice(0, i).reduce((acc, s) => acc + s.number_of_episodes, 0);
   return { done: Math.min(total, before + j + (w.fully_watched ? 1 : 0)), total };
 }
@@ -37,16 +41,16 @@ async function position(token: Token, w: WatchlistItem): Promise<Position | null
 /** Le posizioni per serie; una serie che non si riesce a contare resta fuori, e nella pagina avrà solo le barrette grigie. */
 export async function episodePositions(token: Token, items: WatchlistItem[]): Promise<Record<string, Position>> {
   const out: Record<string, Position> = {};
-  let failed = 0;
+  const failed: Record<string, number> = {};
   const t0 = Date.now();
   for (const w of items) {
     const id = w.panel.episode_metadata?.series_id;
     if (!id || out[id]) continue;
-    const p = await position(token, w).catch(() => null);
-    if (p) out[id] = p;
-    else failed++;
+    const p = await position(token, w).catch((e: Error) => e.message);
+    if (typeof p === "string") failed[p] = (failed[p] ?? 0) + 1;
+    else out[id] = p;
     await Bun.sleep(CMS_PAUSE_MS);
   }
-  console.log(`puntate viste: ${Object.keys(out).length} serie contate, ${failed} no, in ${Math.round((Date.now() - t0) / 1000)} s`);
+  console.log(`puntate viste: ${Object.keys(out).length} serie contate in ${Math.round((Date.now() - t0) / 1000)} s; non contate: ${JSON.stringify(failed)}`);
   return out;
 }
