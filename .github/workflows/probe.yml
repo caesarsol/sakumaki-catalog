@@ -1,13 +1,13 @@
 name: probe
 
-# Temporaneo, su un ramo da cancellare: lancia i workflow su main, che via MCP non si possono lanciare.
+# Temporaneo, su un ramo da cancellare.
 on:
   push:
     branches: [claude/probe-tmp]
 
 permissions:
   contents: read
-  actions: write
+  actions: read
 
 jobs:
   dispatch:
@@ -15,5 +15,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - run: gh workflow run ratings.yml --ref main -R ${{ github.repository }}
-      - run: gh workflow run watchlist.yml --ref main -R ${{ github.repository }}
+      - run: gh run download "$(gh run list -R ${{ github.repository }} --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" -R ${{ github.repository }} --name watchlist --dir data
+      - run: jq -c 'to_entries[] | select(.value.title | test("GTO|DAN DA DAN|Shangri"; "i"))' data/watchlist-progress.json
+      - run: jq -r '[.[]] | "con ep_total: \([.[]|select(.ep_total)]|length); finite ma ep_done 0: \([.[]|select(.fully_watched and (.ep_done//0)==0)]|length)"' data/watchlist-progress.json
