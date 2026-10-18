@@ -72,6 +72,12 @@ function lowerBound(s: SeriesObject): number {
 
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
+// Le categorie del servizio hanno doppioni di grafia ("Shounen" su due serie, "Shonen" su cinquecento):
+// nei filtri sarebbero due voci, e filtrare per una perderebbe le serie dell'altra.
+const GENRE_ALIASES: Record<string, string> = { Shounen: "Shonen", Shoujo: "Shojo" };
+const tidy = (t: string) => t.replace(/\s+/g, " ").trim(); // titoli con due spazi in mezzo, che la ricerca non trova
+const genresOf = (s: SeriesObject) => [...new Set((s.series_metadata.tenant_categories ?? []).map((g) => GENRE_ALIASES[tidy(g)] ?? tidy(g)))];
+
 const rated = catalog.filter((s) => s.rating?.total > 0);
 const catalogMean = rated.reduce((acc, s) => acc + fineRating(s), 0) / rated.length;
 /** Media bayesiana che può solo abbassare il voto: tirare verso la media del catalogo una serie sotto la media la premierebbe per avere pochi voti. */
@@ -95,7 +101,7 @@ await Bun.write(`${dataDir}/catalog-scored.ndjson`, top.map((s) => JSON.stringif
 
 const rows = top.map((s) => ({
   id: s.id,
-  title: s.title,
+  title: tidy(s.title),
   url: `${SITE_BASE}/series/${s.id}/${s.slug_title}`,
   rating: s.rating_fine,
   lcb: s.rating_lcb,
@@ -104,7 +110,7 @@ const rows = top.map((s) => ({
   year: s.series_metadata.series_launch_year,
   seasons: s.series_metadata.season_count,
   episodes: s.series_metadata.episode_count,
-  genres: s.series_metadata.tenant_categories ?? [],
+  genres: genresOf(s),
   maturity: s.series_metadata.maturity_ratings.join(", "),
   simulcast: s.series_metadata.is_simulcast,
   dubbed: s.series_metadata.is_dubbed,
