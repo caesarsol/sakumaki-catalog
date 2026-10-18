@@ -1,6 +1,7 @@
 import type { SeriesObject, WatchlistItem } from "./api";
 import { COUNTRIES } from "./countries";
 import { progressBySeries, type Progress } from "./watchlist-progress";
+import type { ExternalRatings } from "./ratings-external";
 const SITE_BASE = Bun.env.SITE_BASE;
 if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
@@ -23,6 +24,9 @@ const progressFile = Bun.file(`${dataDir}/watchlist-progress.json`); // in CI ar
 const watchlistFile = Bun.file(`${dataDir}/watchlist.json`); // in locale di solito c'è la watchlist intera
 if (await progressFile.exists()) progress = await progressFile.json();
 else if (await watchlistFile.exists()) progress = progressBySeries(((await watchlistFile.json()) as { data: WatchlistItem[] }).data);
+// Voti esterni da ratings.yml: se l'artifact manca le due colonne restano vuote, invece di dire "nessun abbinamento" a tutte.
+const externalFile = Bun.file(`${dataDir}/ratings-external.json`);
+const external: ExternalRatings | null = (await externalFile.exists()) ? await externalFile.json() : null;
 
 // Una voce di watchlist senza riga in catalogo resta invisibile nella pagina. Di norma sono i film e i
 // recap: sono serie con un episodio solo, con un loro `series_id`, che il browse `type=series` non elenca.
@@ -126,6 +130,13 @@ const rows = top.map((s) => ({
   ep_done: progress[s.id]?.ep_done ?? 0,
   ep_total: progress[s.id]?.ep_total ?? 0,
   countries: s.countries,
+  // -1 nessun abbinamento, -2 voti esterni non scaricati: numeri e non null per l'ordinamento, come wl_season
+  al: external ? external.series[s.id]?.al?.score ?? -1 : -2,
+  al_votes: external?.series[s.id]?.al?.votes ?? 0,
+  al_n: external?.series[s.id]?.al?.entries ?? 0,
+  mal: external?.mal_available ? external.series[s.id]?.mal?.score ?? -1 : -2,
+  mal_votes: external?.series[s.id]?.mal?.votes ?? 0,
+  mal_n: external?.series[s.id]?.mal?.entries ?? 0,
 }));
 const template = await Bun.file(`${import.meta.dir}/table.html`).text();
 const html = template

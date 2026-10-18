@@ -98,6 +98,7 @@
   th.sorted.desc::after { content: "\00a0▼" attr(data-ord); }
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
   th.flag, td.flag { text-align: center; }
+  td.nomatch { color: var(--line); }
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
   th[data-k="wl_rank"], td.mine.start { border-left: 1px solid var(--line); padding-left: 8px; } /* stacca il blocco personale dalle bandiere */
   .genres { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -203,6 +204,8 @@
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
     <th data-k="votes" data-num>Votanti</th>
     <th data-k="s:5" data-num title="1★→5★ chiaro→scuro; larghezze ∝ quota di voti; ▼ il voto medio, con la barra letta come scala da 1 a 5; il clic ordina per quota di 5★, le altre stelle stanno nel pannello dell'ordinamento">Distribuzione<span class="star"></span> <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
+    <th data-k="al" data-num title="voto medio su AniList, 0–100: media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">AniList</th>
+    <th data-k="mal" data-num title="voto su MyAnimeList, 1–10: media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">MAL</th>
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num>Stagioni</th>
     <th data-k="episodes" data-num>Episodi</th>
@@ -250,6 +253,11 @@
     const tip = r.ep_total ? `${k} viste su ${n} puntate` : `${n} puntate`;
     return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
   };
+  /** Voto esterno: il numero, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
+  const extCell = (score, votes, n, site, digits) =>
+    score === -2 ? `<td></td>`
+    : score < 0 ? `<td class="num nomatch" title="nessuna voce di ${site} abbinata">✗</td>`
+    : `<td class="num" title="${site}: ${score} · ${fmt.format(votes)} votanti · ${n} ${n === 1 ? "voce" : "voci (stagioni o film)"}">${score.toFixed(digits)}</td>`;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   /* ---- filtri multi-selezione a tre stati -------------------------------------------------
@@ -363,6 +371,8 @@
       <td class="num">${r.rating.toFixed(3)}</td>
       <td class="num">${fmt.format(r.votes)}</td>
       <td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="bar">${r.stars.map((s, i) => `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>`).join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div></td>
+      ${extCell(r.al, r.al_votes, r.al_n, "AniList", 0)}
+      ${extCell(r.mal, r.mal_votes, r.mal_n, "MAL", 2)}
       <td class="num">${r.year ?? ""}</td>
       <td class="num">${r.seasons}</td>
       <td class="num">${r.episodes}</td>

@@ -1,0 +1,30 @@
+name: ratings
+
+# Voti da AniList e MyAnimeList per le serie del catalogo, con API pubbliche e senza credenziali del servizio:
+# artifact `ratings`, poi chiede a deploy.yml di ripubblicare. Parte a fine catalog.yml, una volta a settimana.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write # per scaricare l'artifact del catalogo e lanciare deploy.yml a fine run
+
+jobs:
+  ratings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }} # facoltativo: senza, il voto MAL passa da Jikan
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data
+      - run: bun run ratings # AniList a 30 richieste al minuto: un quarto d'ora; MAL una richiesta per voce abbinata
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ratings
+          path: data/ratings-external.json
+          retention-days: 90
+      - run: gh workflow run deploy.yml

@@ -42,7 +42,8 @@ stanno in JSON dentro `<script id="data">`: da lì si legge tutto, id e stato wa
 |---|---|---|
 | `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN → artifact `catalog`, poi lancia `watchlist.yml` |
 | `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account → artifact `watchlist`, poi lancia `deploy.yml` |
-| `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist | scarica i due artifact, genera la pagina, pubblica su Pages |
+| `ratings.yml` | a fine catalog | voti AniList e MAL abbinati per id alle serie → artifact `ratings`, poi lancia `deploy.yml` |
+| `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | scarica gli artifact, genera la pagina, pubblica su Pages |
 
 02:00 UTC sono le 04:00 a Roma d'estate e le 03:00 d'inverno: il cron di Actions è in UTC e non segue
 l'ora legale. In pratica però GitHub fa partire i cron con ore di ritardo: nella settimana del 7 ottobre
