@@ -64,6 +64,19 @@ La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il gi
   CODE: White, Sing a Bit of Harmony, Hakubo, Magical Explorer, Bokuai Kimiai Movie, Kabaneri "Life That
   Burns", Slime "Scarlet Bond", BOCCHI THE ROCK! Recap Part 2).
 
+### Serie in watchlist registrate sotto un altro id
+
+Con la watchlist del 18 ottobre 2026 (375 serie) "BOCCHI THE ROCK!", "That Time I Got Reincarnated as a
+Slime", "given" e "Kabaneri of the Iron Fortress" risultano fuori watchlist, eppure nell'app hanno il
+segnalibro acceso. Al loro posto la watchlist ha un film, un recap o un seguito dello stesso franchise:
+"BOCCHI THE ROCK! Recap Part 2", "Slime The Movie: Scarlet Bond", "Kabaneri: Life That Burns" (tutti
+stagione 0, episodio 1, orfani perché film) e "given: on the other hand", che invece una riga in catalogo
+ce l'ha ed è dato in **stagione 4**, cioè la numerazione di "given", che ha 4 stagioni. Il motivo: la voce
+della watchlist è il pannello della puntata da cui riprendere, e quando la serie è finita il servizio
+propone il contenuto collegato successivo, che ha il suo `series_id`. Anche nell'app la lista mostra il
+titolo del film, per questo ordinandola per nome la serie non si trova. Un indizio che si vede senza API:
+stagione 0 su una voce orfana, o una stagione oltre il `season_count` della riga in catalogo.
+
 ### Caso aperto: una serie in watchlist che l'API non restituisce
 
 "Alya Sometimes Hides Her Feelings in Russian" (`G1XHJV0XM`) era in watchlist da un anno, con un solo
