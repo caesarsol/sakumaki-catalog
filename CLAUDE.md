@@ -51,8 +51,11 @@ La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il gi
 
 ## Come la pagina incrocia catalogo e watchlist
 
-- L'incrocio è **per id**, mai per titolo. La watchlist non dà l'id della serie: dà l'episodio a cui
-  riprendere (`panel`), e `watchlist-progress.ts` ne prende `episode_metadata.series_id`.
+- L'incrocio è **per id**, mai per titolo. **Chi è in watchlist lo dicono i segnalibri**
+  (`/content/v2/<account>/watchlist`, solo id e preferita, una chiamata), non la lista discover: quella dà
+  la puntata a cui riprendere (`panel`, da cui `watchlist-progress.ts` prende `episode_metadata.series_id`)
+  e serve solo per la colonna Puntata e per le puntate viste. Una voce discover senza segnalibro è un
+  sostituto (vedi sotto) e resta fuori; una serie col segnalibro e senza voce discover entra senza puntata.
 - Il catalogo è il browse con `type=series`: **i film non ci sono**. Sul servizio un film è una serie
   con un episodio solo, con un suo `series_id` che il browse non elenca, e la voce di watchlist resta
   senza riga. Il deploy elenca nel log le voci senza riga in catalogo con id, tipo e titolo. Il tipo è
@@ -64,32 +67,18 @@ La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il gi
   CODE: White, Sing a Bit of Harmony, Hakubo, Magical Explorer, Bokuai Kimiai Movie, Kabaneri "Life That
   Burns", Slime "Scarlet Bond", BOCCHI THE ROCK! Recap Part 2).
 
-### Serie in watchlist registrate sotto un altro id
+### Perché non basta la lista discover
 
-Con la watchlist del 18 ottobre 2026 (375 serie) "BOCCHI THE ROCK!", "That Time I Got Reincarnated as a
-Slime", "given" e "Kabaneri of the Iron Fortress" risultano fuori watchlist, eppure nell'app hanno il
-segnalibro acceso. Al loro posto la watchlist ha un film, un recap o un seguito dello stesso franchise:
-"BOCCHI THE ROCK! Recap Part 2", "Slime The Movie: Scarlet Bond", "Kabaneri: Life That Burns" (tutti
-stagione 0, episodio 1, orfani perché film) e "given: on the other hand", che invece una riga in catalogo
-ce l'ha ed è dato in **stagione 4**, cioè la numerazione di "given", che ha 4 stagioni. Il motivo: la voce
-della watchlist è il pannello della puntata da cui riprendere, e quando la serie è finita il servizio
-propone il contenuto collegato successivo, che ha il suo `series_id`. Anche nell'app la lista mostra il
-titolo del film, per questo ordinandola per nome la serie non si trova. Un indizio che si vede senza API:
-stagione 0 su una voce orfana, o una stagione oltre il `season_count` della riga in catalogo.
-
-### Caso aperto: una serie in watchlist che l'API non restituisce
-
-"Alya Sometimes Hides Her Feelings in Russian" (`G1XHJV0XM`) era in watchlist da un anno, con un solo
-profilo e con lo stesso id della riga in catalogo, eppure nella risposta dell'API del 7 ottobre mattina
-non c'era sotto nessun id e nessuna voce era stata scartata. La paginazione è esclusa: il run delle 19:09
-UTC ha raccolto 374 voci in 4 pagine piene, 374 dichiarate. Nell'app lo stesso giorno la lista della
-watchlist ordinata per titolo non la mostrava, mentre la scheda della serie la dava con il segnalibro
-attivo: la lista `discover/.../watchlist` e il flag sulla serie erano in disaccordo lato server. Dopo
-una rimozione e riaggiunta dall'app il run successivo è passato da 371 a 374 voci, ma Alya mancava
-ancora. Il nostro client legge la stessa lista dell'app: per capire da che parte sta la divergenza c'è
-`bun run src/watchlist-probe.ts <series_id>`, da lanciare in locale con il `.env`: prova la lista con
-parametri diversi, la chiamata del segnalibro, la lista grezza degli id e l'oggetto serie, e stampa
-solo esiti e conteggi.
+La sonda del 18 ottobre 2026 (run su un ramo usa e getta) ha confrontato le due liste: 378 voci discover,
+399 segnalibri, 383 dei quali su serie del catalogo. **14 serie avevano il segnalibro e nessuna voce
+discover**: Alya, Barakamon, Mushi-Shi, K-ON!, Kiss Him Not Me, Anonymous Noise, SNAFU, Domestic
+Girlfriend, 2.5 Dimensional Seduction, Fastest Finger First, e Bocchi, Slime, given, Kabaneri. Per queste
+ultime quattro la voce discover c'è ma porta il film, il recap o il seguito che il servizio propone a serie
+finita, con il suo `series_id` ("given: on the other hand" in stagione 4, cioè con la numerazione di given;
+"BOCCHI THE ROCK! Recap Part 2"…): per questo nell'app la lista ordinata per titolo non le mostra. Per le
+altre la lista discover semplicemente non le restituisce, e il caso di Alya, aperto dal 7 ottobre, era
+questo. I segnalibri sono il dato della scheda serie e tornano tutti in una chiamata. La chiamata
+`?content_ids=<id,…>` dà lo stesso dato per id scelti, anche 200 per volta.
 
 ## Limiti noti del punteggio
 

@@ -103,6 +103,31 @@ export async function fetchWatchlist(token: Token, locale = "en-US"): Promise<Wa
   return items;
 }
 
+/**
+ * Gli id con il segnalibro acceso, senza pannelli: è il dato che la scheda serie mostra come "in watchlist".
+ * La lista discover qui sopra non basta: dà la puntata da cui riprendere, e a serie finita la sostituisce
+ * con il film o il seguito collegato, che ha un altro id; alcune serie (Alya, Barakamon, K-ON!…) non ci
+ * sono proprio, eppure qui risultano. Una chiamata sola: `n` alto restituisce tutto.
+ */
+export async function fetchBookmarks(token: Token, locale = "en-US"): Promise<{ id: string; is_favorite: boolean }[]> {
+  const items: { id: string; is_favorite: boolean }[] = [];
+  for (let start = 0; ; ) {
+    const url = new URL(`${BASE}/content/v2/${token.account_id}/watchlist`);
+    url.search = new URLSearchParams({ n: "1000", start: String(start), locale }).toString();
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
+    });
+    if (!res.ok) throw new Error(`bookmarks failed: ${res.status}`);
+    const page: { total: number; data: { id: string; is_favorite: boolean }[] } = await res.json();
+    items.push(...page.data.map(({ id, is_favorite }) => ({ id, is_favorite })));
+    if (page.data.length === 0 || items.length >= page.total) break;
+    start += page.data.length;
+  }
+  console.log(`segnalibri: ${items.length}`);
+  return items;
+}
+
 type StarBucket = { displayed: string; unit: string; percentage: number };
 export type Rating = Record<"1s" | "2s" | "3s" | "4s" | "5s", StarBucket> & {
   average: string;
