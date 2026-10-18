@@ -80,15 +80,18 @@
      Un gradiente e non un elemento per puntata: le serie lunghe ne hanno più di mille. Sotto i 3px per
      puntata lo spazio fra le barrette sparirebbe in un tremolio, e la striscia diventa piena (--gap: 0px). */
   .eps { height: 0; }
-  /* Due strati con la stessa trama: sopra le puntate viste in arancio, tagliato a k puntate con background-size,
-     sotto tutte in grigio. Il passo è assoluto (larghezza della striscia / n) e non in percentuale, perché uno
-     strato ridimensionato misurerebbe le percentuali sulla propria larghezza e le barrette non coinciderebbero. */
+  /* Tre strati con lo stesso passo: le puntate viste in arancio, tagliate a k puntate con background-size; la
+     puntata iniziata e non finita, mezza barretta arancio subito dopo (--half 1, altrimenti larga zero); sotto
+     tutte in grigio. Il passo è assoluto (larghezza della striscia / n) e non in percentuale, perché uno strato
+     ridimensionato misurerebbe le percentuali sulla propria larghezza e le barrette non coinciderebbero. */
   .eps .full {
     --seg: calc((var(--title-w) - var(--cell-pad)) / var(--n));
     position: relative; top: 2px; height: 3px; background-repeat: no-repeat;
     background-image: repeating-linear-gradient(to right, var(--accent) 0 calc(var(--seg) - var(--gap)), transparent 0 var(--seg)),
+                      linear-gradient(var(--accent), var(--accent)),
                       repeating-linear-gradient(to right, var(--ep) 0 calc(var(--seg) - var(--gap)), transparent 0 var(--seg));
-    background-size: calc(var(--seg) * var(--k)) 100%, 100% 100%;
+    background-size: calc(var(--seg) * var(--k)) 100%, calc((var(--seg) - var(--gap)) / 2 * var(--half)) 100%, 100% 100%;
+    background-position: 0 0, calc(var(--seg) * var(--k)) 0, 0 0;
   }
   :root { --ep: #dcd6ce; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
@@ -250,8 +253,10 @@
   const epsStrip = (r) => {
     const n = r.ep_total || r.episodes, k = Math.min(r.ep_done || 0, n);
     if (!n) return "";
-    const tip = r.ep_total ? `${k} viste su ${n} puntate` : `${n} puntate`;
-    return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
+    // la puntata da cui riprendere è iniziata quando non è né finita né mai cominciata
+    const half = r.ep_total && k < n && !r.wl_watched && !r.wl_new ? 1 : 0;
+    const tip = r.ep_total ? `${k} viste su ${n} puntate${half ? `, la ${k + 1}ª iniziata` : ""}` : `${n} puntate`;
+    return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--half:${half};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
   };
   // Una quota che nella barra (9rem, 144px) varrebbe meno di un pixel non si vedrebbe, ma il suo spazio da 1px sì,
   // e sembrerebbe una stella con dei voti: la si toglie con il suo spazio. Resta nel suggerimento al passaggio.
