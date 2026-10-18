@@ -74,6 +74,14 @@
   .peek { position: sticky; left: var(--cell-pad); width: var(--strip); } /* left pari al padding della cella: il testo non sobbalza quando la colonna si ferma */
   .full { display: block; width: calc(var(--title-w) - var(--cell-pad)); overflow: hidden; text-overflow: ellipsis; }
   td.title a { text-decoration: none; }
+  /* Le puntate come barrette sotto i generi, nello spazio vuoto in fondo alla cella: l'involucro è alto
+     zero e la striscia si sposta in giù con position: relative, che non conta nel layout, così la riga
+     non cresce. Sta in un .peek come il testo, quindi a tabella scorsa resta visibile l'inizio della serie.
+     Un gradiente e non un elemento per puntata: le serie lunghe ne hanno più di mille. Sotto i 3px per
+     puntata lo spazio fra le barrette sparirebbe in un tremolio, e la striscia diventa piena (--gap: 0px). */
+  .eps { height: 0; }
+  .eps .full { position: relative; top: 2px; height: 3px; background: repeating-linear-gradient(to right, var(--ep) 0 calc(100% / var(--n) - var(--gap)), transparent 0 calc(100% / var(--n))); }
+  :root { --ep: #dcd6ce; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
   th .star { color: var(--accent); font-size: .85em; } /* quale stella sta ordinando, quando non è la 5★ */
@@ -333,7 +341,7 @@
       (wl !== "in" || r.in_watchlist) && (wl !== "out" || !r.in_watchlist));
     visible.sort(compare);
     $("rows").innerHTML = visible.map((r) => `<tr>
-      <td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div></td>
+      <td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${r.episodes ? `<div class="peek eps"><div class="full" style="--n:${r.episodes};--gap:${r.episodes > 110 ? 0 : 1}px" title="${r.episodes} puntate"></div></div>` : ""}</td>
       <td class="num">${r.weighted.toFixed(3)}</td>
       <td class="num">${r.lcb.toFixed(3)}</td>
       <td class="num">${r.rating.toFixed(3)}</td>
