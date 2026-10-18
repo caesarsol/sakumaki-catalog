@@ -7,16 +7,21 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      R: ${{ github.repository }}
     steps:
-      - run: gh run download "$(gh run list -R ${{ github.repository }} --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" -R ${{ github.repository }} --name watchlist --dir data
       - run: |
-          jq -c 'to_entries[] | select(.value.title | test("GTO|DAN DA DAN|Shangri"; "i"))' data/watchlist-progress.json
+          gh workflow run watchlist.yml --ref main -R "$R"
+          sleep 15
+          id=$(gh run list -R "$R" --workflow watchlist.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+          gh run watch "$id" -R "$R" --exit-status > /dev/null
+          gh run download "$id" -R "$R" --name watchlist --dir data
       - run: |
-          jq -r '[.[]] | "con ep_total: \([.[]|select(.ep_total)]|length); finite ma ep_done 0: \([.[]|select(.fully_watched and (.ep_done//0)==0)]|length)"' data/watchlist-progress.json
+          jq -c 'to_entries[] | select(.key | test("GXJHM3P19|G1XHJV0XM|GXJHM3N2E|GYMGD89VY|GYZJ43JMR|GRG5WWD4R|GRQ4QG4GY")) | {id: .key, s: .value.season, done: .value.ep_done, tot: .value.ep_total, started: .value.ep_started}' data/watchlist-progress.json
+          jq -r '[.[]] | "con ep_total: \([.[]|select(.ep_total)]|length) su \(length); iniziate: \([.[]|select(.ep_started)]|length)"' data/watchlist-progress.json
