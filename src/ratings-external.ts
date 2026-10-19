@@ -24,6 +24,31 @@ const ANILIST_PAUSE_MS = 2100;
 // così si vede se la pausa è troppo corta.
 const MAL_PAUSE_MS = MAL_CLIENT_ID ? 500 : 1100;
 
+/**
+ * Un turno ogni `ms` millisecondi, contati fra un inizio e l'altro: la latenza della risposta non si somma
+ * alla pausa, e più cicli che condividono lo stesso turno restano insieme sotto il limite.
+ */
+function pacer(ms: number) {
+  let next = 0;
+  return async () => {
+    const slot = Math.max(Date.now(), next);
+    next = slot + ms;
+    await Bun.sleep(slot - Date.now());
+  };
+}
+/** fetch che riprova gli errori di rete (connessione chiusa, timeout): uno solo non deve far fallire il run. */
+async function fetchRetry(url: string, init: RequestInit, onRetry: () => void): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
+    } catch (e) {
+      if (attempt === 5) throw e;
+      onRetry();
+      await Bun.sleep(10_000 * attempt);
+    }
+  }
+}
+
 type Entry = { id: number; idMal: number | null; meanScore: number | null; votes: number };
 export type ExternalRating = { score: number; votes: number; entries: number };
 export type ExternalRatings = { mal_available: boolean; series: Record<string, { al?: ExternalRating; mal?: ExternalRating }> };
@@ -47,14 +72,14 @@ function seriesOf(url: string): string | undefined {
   return (slug && bySlug.get(normSlug(slug))) || undefined;
 }
 
+let anilistRetries = 0;
 async function post(query: string, variables: object): Promise<any> {
   for (;;) {
-    const res = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      signal: AbortSignal.timeout(30_000),
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ query, variables }),
-    });
+    const res = await fetchRetry(
+      "https://graphql.anilist.co",
+      { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ query, variables }) },
+      () => anilistRetries++,
+    );
     if (res.status === 429) {
       await Bun.sleep(Number(res.headers.get("retry-after") ?? 60) * 1000 + 1000);
       continue;
@@ -78,8 +103,10 @@ let anilistDone = false;
 
 async function scanAniList() {
   const lastYear = new Date().getFullYear() + 1;
+  const turn = pacer(ANILIST_PAUSE_MS);
   try {
     for (let year = 1917, page = 1; year <= lastYear; ) {
+      await turn();
       const { Page } = await post(ANIME, { page, from: (year - 1) * 10000 + 9999, to: (year + 1) * 10000 });
       pages++;
       for (const m of Page.media) {
@@ -92,11 +119,10 @@ async function scanAniList() {
       }
       if (Page.pageInfo.hasNextPage) page++;
       else {
-        if (year % 10 === 0) console.log(`AniList: fino al ${year}, ${pages} pagine, ${matched.size} serie abbinate, ${malQueue.length} id in coda per MAL`);
+        if (year % 10 === 0) console.log(`AniList: fino al ${year}, ${pages} pagine, ${matched.size} serie abbinate, ${malQueue.length} id in coda per MAL, ${anilistRetries} errori di rete ritentati`);
         year++;
         page = 1;
       }
-      await Bun.sleep(ANILIST_PAUSE_MS);
     }
   } finally {
     anilistDone = true; // anche se AniList fallisce, il ciclo MAL deve poter finire
@@ -111,15 +137,16 @@ function weightedMean(parts: { score: number | null; votes: number }[]): Externa
   return { score: Math.round((voted.reduce((a, p) => a + p.score! * p.votes, 0) / votes) * 100) / 100, votes, entries: voted.length };
 }
 
-const malRefused: Record<number, number> = {}; // risposte 429, 403 e 5xx, per codice
+const malRefused: Record<string, number> = {}; // risposte 429, 403 e 5xx per codice, ed errori di rete
+const refused = (k: string | number) => (malRefused[k] = (malRefused[k] ?? 0) + 1);
 async function malScore(id: number): Promise<{ score: number | null; votes: number } | null> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const res = MAL_CLIENT_ID
-      ? await fetch(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID }, signal: AbortSignal.timeout(30_000) })
-      : await fetch(`https://api.jikan.moe/v4/anime/${id}`, { signal: AbortSignal.timeout(30_000) });
+      ? await fetchRetry(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID } }, () => refused("rete"))
+      : await fetchRetry(`https://api.jikan.moe/v4/anime/${id}`, {}, () => refused("rete"));
     if (res.status === 404) return null;
     if (res.status === 429 || res.status === 403 || res.status >= 500) {
-      malRefused[res.status] = (malRefused[res.status] ?? 0) + 1;
+      refused(res.status);
       await Bun.sleep(5000 * attempt);
       continue;
     }
@@ -136,25 +163,31 @@ let malFailed = 0;
 let malError = "";
 const malStart = Date.now();
 
-/** Svuota la coda degli id MAL finché AniList ne produce; se la coda è vuota aspetta la pagina successiva. */
+/**
+ * Svuota la coda degli id MAL finché AniList ne produce; se la coda è vuota aspetta la pagina successiva.
+ * Due cicli con un turno comune: una chiamata parte ogni MAL_PAUSE_MS anche se la precedente non ha
+ * ancora risposto (la risposta di MAL impiega circa 0,7 s, e con un ciclo solo il ritmo era la metà).
+ */
+const malTurn = pacer(MAL_PAUSE_MS);
+let malGaveUp = false;
 async function scanMal() {
-  while (!anilistDone || malQueue.length) {
+  while (!malGaveUp && (!anilistDone || malQueue.length)) {
     const id = malQueue.shift();
     if (id === undefined) {
       await Bun.sleep(1000);
       continue;
     }
+    await malTurn();
     const r = await malScore(id).catch((e: Error) => ((malError = e.message), null));
     if (r) mal.set(id, r);
     else malFailed++;
     malDone++;
-    if (malDone === 5 && mal.size === 0) return; // cinque fallimenti su cinque: la fonte non risponde, inutile insistere
+    if (malDone >= 5 && mal.size === 0) malGaveUp = true; // cinque fallimenti su cinque: la fonte non risponde, inutile insistere
     if (malDone % 250 === 0) console.log(`MAL: ${malDone} lette (${malQueue.length} in coda) in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}`);
-    await Bun.sleep(MAL_PAUSE_MS);
   }
 }
 
-await Promise.all([scanAniList(), scanMal()]);
+await Promise.all([scanAniList(), scanMal(), scanMal()]);
 const malAvailable = mal.size > 0;
 
 const out: ExternalRatings = { mal_available: malAvailable, series: {} };
@@ -166,7 +199,7 @@ for (const [series, entries] of matched) {
 await Bun.write(`${dataDir}/ratings-external.json`, JSON.stringify(out));
 const count = (k: "al" | "mal") => Object.values(out.series).filter((r) => r[k]).length;
 console.log(
-  `AniList: ${pages} pagine, ${matched.size} serie su ${catalog.length} abbinate, ${count("al")} con voto. ` +
+  `AniList: ${pages} pagine (${anilistRetries} errori di rete ritentati), ${matched.size} serie su ${catalog.length} abbinate, ${count("al")} con voto. ` +
     `MAL (${MAL_CLIENT_ID ? "API ufficiale" : "Jikan"}): ` +
     (malAvailable ? `${malDone} voci in ${Math.round((Date.now() - malStart) / 60000)} min, ${malFailed} non lette, rifiuti ${JSON.stringify(malRefused)}, ${count("mal")} serie con voto.` : `non raggiungibile (${malError || "nessun voto"}), colonna vuota.`),
 );
