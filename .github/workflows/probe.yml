@@ -17,4 +17,6 @@ jobs:
       R: ${{ github.repository }}
     steps:
       - run: |
+          gh run cancel 39333511104 -R "$R" || true
+          gh run watch 39333511104 -R "$R" > /dev/null || true
           gh workflow run ratings.yml --ref main -R "$R"
