@@ -19,7 +19,7 @@ Usa i dati veri, presi dagli ultimi artifact di Actions: `catalog` (da `catalog.
 Limite noto: da Claude Code sul web il download degli artifact **non funziona** — l'API risponde ma
 reindirizza a `blob.core.windows.net`, che il proxy dell'ambiente rifiuta (vale per `gh run download`,
 per l'MCP di GitHub e per curl sul link firmato); anche il sito pubblicato (`caesarsol.github.io`) è
-irraggiungibile. Funzionano invece la lettura di run, job e log (`gh run list/view`, `gh api`, l'MCP),
+irraggiungibile. Funzionano invece la lettura di run e job (`gh run list/view`, `gh api`) e dei log con l'MCP,
 anche senza token perché il repo è pubblico. In quel caso si ripiega su dati sintetici della stessa forma,
 **dicendolo esplicitamente** invece di far passare l'anteprima per dati reali.
 
@@ -27,10 +27,39 @@ La scorciatoia che funziona: chi lavora con Claude scarica lo zip dell'artifact 
 lo carica in chat. L'artifact `github-pages` contiene `artifact.tar` con la pagina intera, e le righe
 stanno in JSON dentro `<script id="data">`: da lì si legge tutto, id e stato watchlist compresi.
 
+## Interrogare l'API vera: il ramo della sonda
+
+Da Claude Code sul web l'API del servizio, AniList, Jikan e NordVPN sono irraggiungibili, il dispatch dei
+workflow via MCP risponde 403 e `gh run view --log` è rifiutato dal proxy. Funzionano due cose: il push su
+un ramo `claude/…` e la lettura dei log con l'MCP (`get_job_logs`, con l'id del job da
+`gh api repos/caesarsol/sakumaki-catalog/actions/runs/<run>/jobs`). Per questo esiste il ramo
+**`claude/probe-tmp`**, da tenere: il suo `.github/workflows/probe.yml` parte a ogni push sul ramo, con i
+secret del repo (`AUTH_COOKIE`, `API_BASE`, `NORD_USER`, `NORD_PASS`). **Ogni domanda sull'API reale passa
+da lì** invece di indovinare la forma di una risposta:
+
+- uno script di sonda in `src/` sul ramo (`bun run src/probe.ts`), che chiama l'API e stampa quel che serve;
+- `gh workflow run <workflow>.yml --ref main -R "$R"` per lanciare un workflow su main, con `actions: write`
+  fra i permessi (anche `gh run watch` per aspettarlo dentro lo stesso job);
+- `gh run download` di un artifact più `jq`, per leggere i dati veri di watchlist, catalogo o voti.
+
+Prima di usarlo lo si riallinea a main (`git fetch origin main claude/probe-tmp`,
+`git checkout -B claude/probe-tmp origin/claude/probe-tmp`, `git merge origin/main`), si cambiano gli step,
+si fa commit e push sul ramo; su main non si fa mai merge del ramo, così la sua storia resta fuori. Il ramo
+non si può cancellare dalla sessione, ma non serve: è lì apposta.
+
+**I log di Actions sono pubblici**: la sonda stampa solo esiti, conteggi, nomi di campi e dati che sono già
+pubblici nella pagina o negli artifact (id, titoli, avanzamento), mai host, account, token o cookie. Il
+workflow va scritto con i comandi in blocchi `run: |`: un `: ` in una riga non quotata rende il file YAML
+non valido e il run fallisce senza job.
+
 ## Convenzioni
 
 - Commenti e messaggi di commit in italiano. I commenti dicono il perché, non il cosa.
-- Nessuna dipendenza a runtime nel repo: Tom Select e SortableJS arrivano da CDN dentro la pagina.
+- Le librerie della pagina (Tom Select, SortableJS) sono dipendenze npm con versione fissata: `table.ts` ne
+  copia i file da `node_modules` dentro la pagina, che resta un file unico e non chiama nessun CDN.
+- La tabella è virtualizzata (TanStack Virtual, `page-vendor.ts` impacchettato da `table.ts`): nella pagina
+  ci sono solo le righe visibili più un margine. Le righe devono restare tutte alte uguali, `ROW_H` nello
+  script e l'altezza di `th, tbody td` nel CSS; una riga "metro" invisibile tiene ferme le larghezze.
 - `data/` è gitignored: è tutta roba generata o scaricata.
 - Gli host dell'API e del sito stanno nei secret, non nel repo: i log di Actions sono pubblici.
 - Il repo è pubblico, quindi lo sono anche artifact e pagina: fuori da lì tenere tutto ciò che non
@@ -41,8 +70,9 @@ stanno in JSON dentro `<script id="data">`: da lì si legge tutto, id e stato wa
 | workflow | quando | cosa fa |
 |---|---|---|
 | `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN → artifact `catalog`, poi lancia `watchlist.yml` |
-| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account → artifact `watchlist`, poi lancia `deploy.yml` |
-| `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist | scarica i due artifact, genera la pagina, pubblica su Pages |
+| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN → artifact `watchlist`, poi lancia `deploy.yml` |
+| `ratings.yml` | a fine catalog | voti AniList e MAL abbinati per id alle serie → artifact `ratings`, poi lancia `deploy.yml` |
+| `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | scarica gli artifact, genera la pagina, pubblica su Pages |
 
 02:00 UTC sono le 04:00 a Roma d'estate e le 03:00 d'inverno: il cron di Actions è in UTC e non segue
 l'ora legale. In pratica però GitHub fa partire i cron con ore di ritardo: nella settimana del 7 ottobre
@@ -51,8 +81,15 @@ La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il gi
 
 ## Come la pagina incrocia catalogo e watchlist
 
-- L'incrocio è **per id**, mai per titolo. La watchlist non dà l'id della serie: dà l'episodio a cui
-  riprendere (`panel`), e `watchlist-progress.ts` ne prende `episode_metadata.series_id`.
+- L'incrocio è **per id**, mai per titolo. **Chi è in watchlist lo dicono i segnalibri**
+  (`/content/v2/<account>/watchlist`, solo id e preferita, una chiamata), non la lista discover: quella dà
+  la puntata a cui riprendere (`panel`, da cui `watchlist-progress.ts` prende `episode_metadata.series_id`)
+  e serve solo per la colonna Puntata e per le puntate viste. Una voce discover senza segnalibro è un
+  sostituto (vedi sotto) e resta fuori; una serie col segnalibro e senza voce discover entra senza puntata.
+- Le barrette sotto il titolo sono le puntate; quelle viste, in arancio, le conta `watchlist-position.ts`
+  per le serie in watchlist: tutte quelle prima della puntata da cui riprendere, più quella se è finita.
+  Conta sulla lista delle puntate (stagioni per `season_sequence_number`, indice nella stagione), non sui
+  numeri del pannello, che saltano. Due chiamate CMS per serie, qualche minuto a ogni run.
 - Il catalogo è il browse con `type=series`: **i film non ci sono**. Sul servizio un film è una serie
   con un episodio solo, con un suo `series_id` che il browse non elenca, e la voce di watchlist resta
   senza riga. Il deploy elenca nel log le voci senza riga in catalogo con id, tipo e titolo. Il tipo è
@@ -64,32 +101,18 @@ La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il gi
   CODE: White, Sing a Bit of Harmony, Hakubo, Magical Explorer, Bokuai Kimiai Movie, Kabaneri "Life That
   Burns", Slime "Scarlet Bond", BOCCHI THE ROCK! Recap Part 2).
 
-### Serie in watchlist registrate sotto un altro id
+### Perché non basta la lista discover
 
-Con la watchlist del 18 ottobre 2026 (375 serie) "BOCCHI THE ROCK!", "That Time I Got Reincarnated as a
-Slime", "given" e "Kabaneri of the Iron Fortress" risultano fuori watchlist, eppure nell'app hanno il
-segnalibro acceso. Al loro posto la watchlist ha un film, un recap o un seguito dello stesso franchise:
-"BOCCHI THE ROCK! Recap Part 2", "Slime The Movie: Scarlet Bond", "Kabaneri: Life That Burns" (tutti
-stagione 0, episodio 1, orfani perché film) e "given: on the other hand", che invece una riga in catalogo
-ce l'ha ed è dato in **stagione 4**, cioè la numerazione di "given", che ha 4 stagioni. Il motivo: la voce
-della watchlist è il pannello della puntata da cui riprendere, e quando la serie è finita il servizio
-propone il contenuto collegato successivo, che ha il suo `series_id`. Anche nell'app la lista mostra il
-titolo del film, per questo ordinandola per nome la serie non si trova. Un indizio che si vede senza API:
-stagione 0 su una voce orfana, o una stagione oltre il `season_count` della riga in catalogo.
-
-### Caso aperto: una serie in watchlist che l'API non restituisce
-
-"Alya Sometimes Hides Her Feelings in Russian" (`G1XHJV0XM`) era in watchlist da un anno, con un solo
-profilo e con lo stesso id della riga in catalogo, eppure nella risposta dell'API del 7 ottobre mattina
-non c'era sotto nessun id e nessuna voce era stata scartata. La paginazione è esclusa: il run delle 19:09
-UTC ha raccolto 374 voci in 4 pagine piene, 374 dichiarate. Nell'app lo stesso giorno la lista della
-watchlist ordinata per titolo non la mostrava, mentre la scheda della serie la dava con il segnalibro
-attivo: la lista `discover/.../watchlist` e il flag sulla serie erano in disaccordo lato server. Dopo
-una rimozione e riaggiunta dall'app il run successivo è passato da 371 a 374 voci, ma Alya mancava
-ancora. Il nostro client legge la stessa lista dell'app: per capire da che parte sta la divergenza c'è
-`bun run src/watchlist-probe.ts <series_id>`, da lanciare in locale con il `.env`: prova la lista con
-parametri diversi, la chiamata del segnalibro, la lista grezza degli id e l'oggetto serie, e stampa
-solo esiti e conteggi.
+La sonda del 18 ottobre 2026 (run su un ramo usa e getta) ha confrontato le due liste: 378 voci discover,
+399 segnalibri, 383 dei quali su serie del catalogo. **14 serie avevano il segnalibro e nessuna voce
+discover**: Alya, Barakamon, Mushi-Shi, K-ON!, Kiss Him Not Me, Anonymous Noise, SNAFU, Domestic
+Girlfriend, 2.5 Dimensional Seduction, Fastest Finger First, e Bocchi, Slime, given, Kabaneri. Per queste
+ultime quattro la voce discover c'è ma porta il film, il recap o il seguito che il servizio propone a serie
+finita, con il suo `series_id` ("given: on the other hand" in stagione 4, cioè con la numerazione di given;
+"BOCCHI THE ROCK! Recap Part 2"…): per questo nell'app la lista ordinata per titolo non le mostra. Per le
+altre la lista discover semplicemente non le restituisce, e il caso di Alya, aperto dal 7 ottobre, era
+questo. I segnalibri sono il dato della scheda serie e tornano tutti in una chiamata. La chiamata
+`?content_ids=<id,…>` dà lo stesso dato per id scelti, anche 200 per volta.
 
 ## Limiti noti del punteggio
 

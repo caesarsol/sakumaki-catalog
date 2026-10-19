@@ -1,6 +1,7 @@
 import type { SeriesObject, WatchlistItem } from "./api";
 import { COUNTRIES } from "./countries";
 import { progressBySeries, type Progress } from "./watchlist-progress";
+import type { ExternalRatings } from "./ratings-external";
 const SITE_BASE = Bun.env.SITE_BASE;
 if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
@@ -23,6 +24,9 @@ const progressFile = Bun.file(`${dataDir}/watchlist-progress.json`); // in CI ar
 const watchlistFile = Bun.file(`${dataDir}/watchlist.json`); // in locale di solito c'è la watchlist intera
 if (await progressFile.exists()) progress = await progressFile.json();
 else if (await watchlistFile.exists()) progress = progressBySeries(((await watchlistFile.json()) as { data: WatchlistItem[] }).data);
+// Voti esterni da ratings.yml: se l'artifact manca le due colonne restano vuote, invece di dire "nessun abbinamento" a tutte.
+const externalFile = Bun.file(`${dataDir}/ratings-external.json`);
+const external: ExternalRatings | null = (await externalFile.exists()) ? await externalFile.json() : null;
 
 // Una voce di watchlist senza riga in catalogo resta invisibile nella pagina. Di norma sono i film e i
 // recap: sono serie con un episodio solo, con un loro `series_id`, che il browse `type=series` non elenca.
@@ -35,7 +39,7 @@ const missing = Object.entries(progress).filter(([id]) => !catalogIds.has(id));
 if (missing.length) {
   console.log(`${missing.length} voci di watchlist senza riga in catalogo:`);
   // Titolo e tipo mancano negli artifact prodotti prima di questa modifica: il primo deploy dopo il merge usa ancora uno di quelli.
-  for (const [id, p] of missing) console.log(`  ${id}  ${(p.type ?? "?").padEnd(8)} ${p.title ?? "(titolo non disponibile)"}`);
+  for (const [id, p] of missing) console.log(`  ${id}  ${(p.type ?? "?").padEnd(8)} ${p.title || "(titolo non disponibile)"}`);
 }
 
 /** Media e deviazione standard dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
@@ -123,14 +127,40 @@ const rows = top.map((s) => ({
   wl_watched: progress[s.id]?.fully_watched ?? false,
   wl_new: progress[s.id]?.never_watched ?? false,
   wl_fav: progress[s.id]?.is_favorite ?? false,
+  ep_done: progress[s.id]?.ep_done ?? 0,
+  ep_total: progress[s.id]?.ep_total ?? 0,
+  ep_started: progress[s.id]?.ep_started ?? false,
   countries: s.countries,
+  // Sulla scala 0–5 del servizio per confrontarli a colpo d'occhio: AniList è in centesimi, MAL in decimi.
+  // -1 nessun abbinamento, -2 voti esterni non scaricati: numeri e non null per l'ordinamento, come wl_season.
+  al: external ? round3((external.series[s.id]?.al?.score ?? -20) / 20) : -2,
+  al_raw: external?.series[s.id]?.al?.score ?? null,
+  al_votes: external?.series[s.id]?.al?.votes ?? 0,
+  al_n: external?.series[s.id]?.al?.entries ?? 0,
+  mal: external?.mal_available ? round3((external.series[s.id]?.mal?.score ?? -2) / 2) : -2,
+  mal_raw: external?.series[s.id]?.mal?.score ?? null,
+  mal_votes: external?.series[s.id]?.mal?.votes ?? 0,
+  mal_n: external?.series[s.id]?.mal?.entries ?? 0,
 }));
+// Le librerie della pagina vengono da node_modules e finiscono dentro la pagina, che resta un file unico:
+// nessun CDN da cui dipendere, versioni fissate in package.json. Un "</script" in una libreria chiuderebbe il tag.
+const vendor = async (path: string) => (await Bun.file(`${import.meta.dir}/../node_modules/${path}`).text()).replace(/<\/(script|style)/gi, "<\\/$1");
+const vendorCss = await vendor("tom-select/dist/css/tom-select.css");
+// TanStack Virtual esce solo come moduli: lo si impacchetta in un iife che lo espone come globale.
+const bundle = await Bun.build({ entrypoints: [`${import.meta.dir}/page-vendor.ts`], format: "iife", target: "browser", minify: true });
+if (!bundle.success) throw new AggregateError(bundle.logs, "impacchettamento di page-vendor.ts fallito");
+const virtualJs = (await bundle.outputs[0]!.text()).replace(/<\/(script|style)/gi, "<\\/$1");
+const vendorJs = [await vendor("tom-select/dist/js/tom-select.complete.min.js"), await vendor("sortablejs/Sortable.min.js"), virtualJs].join("\n;\n");
 const template = await Bun.file(`${import.meta.dir}/table.html`).text();
+// Le sostituzioni con una funzione: una stringa interpreterebbe i "$&" e "$'" che il codice minificato, o un
+// titolo, possono contenere. Le librerie per ultime, così nessun segnaposto si cerca dentro il loro codice.
 const html = template
   .replaceAll("__SUBTITLE__", MIN_RATING > 0 ? `serie con voto ≥ ${MIN_RATING}` : "catalogo serie")
   .replace("__M__", String(WEIGHT_VOTES))
   .replace("__COUNTRIES__", JSON.stringify(countries))
   .replace("__C__", String(round3(catalogMean)))
-  .replace("__ROWS__", JSON.stringify(rows).replaceAll("</", "<\\/"));
+  .replace("__ROWS__", () => JSON.stringify(rows).replaceAll("</", "<\\/"))
+  .replace("__VENDOR_CSS__", () => vendorCss)
+  .replace("__VENDOR_JS__", () => vendorJs);
 await Bun.write(`${dataDir}/index.html`, html);
 console.log(`${top.length} serie su ${catalog.length} (voto >= ${MIN_RATING}): data/catalog-scored.ndjson, data/index.html`);

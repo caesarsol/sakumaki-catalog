@@ -1,4 +1,5 @@
 import type { WatchlistItem } from "./api";
+import type { Position } from "./watchlist-position";
 
 /**
  * L'avanzamento personale che finisce nella tabella, una voce per serie: la puntata a cui sei
@@ -11,18 +12,37 @@ export type Progress = {
   // loro. È il titolo a riconoscerli ("Movie", "Recap", il nome del film).
   title: string;
   type: string;
+  // -1: serie con il segnalibro ma senza voce nella lista discover, quindi senza puntata da cui riprendere
   season: number;
   episode: number | null;
   fully_watched: boolean;
   never_watched: boolean;
   is_favorite: boolean;
+  // puntate viste e totali, e se la successiva è iniziata, da watchlist-position.ts; assenti se non si è riusciti a contarle
+  ep_done?: number;
+  ep_total?: number;
+  ep_started?: boolean;
 };
 
-export function progressBySeries(data: WatchlistItem[]): Record<string, Progress> {
+const fromPosition = (p?: Position) => (p ? { ep_done: p.done, ep_total: p.total, ep_started: p.started } : {});
+
+/**
+ * Le serie in watchlist sono quelle con il segnalibro. Una voce della lista discover senza segnalibro è il
+ * film o il seguito che il servizio propone a serie finita ("given: on the other hand" al posto di "given"):
+ * non la si è messa in watchlist, quindi resta fuori. Senza segnalibri (watchlist.json di prima di questa
+ * modifica) vale la lista discover come prima.
+ */
+export function progressBySeries(
+  data: WatchlistItem[],
+  bookmarks?: { id: string; is_favorite: boolean }[],
+  positions: Record<string, Position> = {},
+): Record<string, Progress> {
+  const marked = bookmarks && new Map(bookmarks.map((b) => [b.id, b]));
   const out: Record<string, Progress> = {};
   for (const w of data) {
     const ep = w.panel.episode_metadata;
     if (!ep || out[ep.series_id]) continue; // una voce per serie: vince la prima, come in watchlist-votes.ts
+    if (marked && !marked.has(ep.series_id)) continue;
     out[ep.series_id] = {
       title: ep.series_title,
       type: w.panel.type,
@@ -30,8 +50,13 @@ export function progressBySeries(data: WatchlistItem[]): Record<string, Progress
       episode: ep.episode_number,
       fully_watched: w.fully_watched,
       never_watched: w.never_watched,
-      is_favorite: w.is_favorite,
+      is_favorite: marked?.get(ep.series_id)?.is_favorite ?? w.is_favorite,
+      ...fromPosition(positions[ep.series_id]),
     };
+  }
+  for (const b of bookmarks ?? []) {
+    if (out[b.id]) continue;
+    out[b.id] = { title: "", type: "bookmark", season: -1, episode: null, fully_watched: false, never_watched: false, is_favorite: b.is_favorite, ...fromPosition(positions[b.id]) };
   }
   return out;
 }
@@ -44,8 +69,9 @@ export function progressBySeries(data: WatchlistItem[]): Record<string, Progress
  */
 if (import.meta.main) {
   const dataDir = `${import.meta.dir}/../data`;
-  const { data }: { data: WatchlistItem[] } = await Bun.file(`${dataDir}/watchlist.json`).json();
-  const progress = progressBySeries(data);
+  const { data, bookmarks, positions }: { data: WatchlistItem[]; bookmarks?: { id: string; is_favorite: boolean }[]; positions?: Record<string, Position> } =
+    await Bun.file(`${dataDir}/watchlist.json`).json();
+  const progress = progressBySeries(data, bookmarks, positions);
   const out = `${dataDir}/watchlist-progress.json`;
   await Bun.write(out, JSON.stringify(progress));
   const v = Object.values(progress);
@@ -53,6 +79,7 @@ if (import.meta.main) {
   // Il riepilogo finisce nel log del workflow, che si legge anche da fuori: l'artifact no.
   console.log(
     `${v.length} serie salvate in ${out}: ${n((p) => p.fully_watched)} con la puntata finita, ` +
-      `${n((p) => p.never_watched)} mai iniziate, ${n((p) => !p.fully_watched && !p.never_watched)} a metà, ${n((p) => p.is_favorite)} preferite`,
+      `${n((p) => p.never_watched)} mai iniziate, ${n((p) => !p.fully_watched && !p.never_watched && p.season >= 0)} a metà, ` +
+      `${n((p) => p.season < 0)} col segnalibro ma fuori dalla lista discover, ${n((p) => p.is_favorite)} preferite, ${n((p) => p.ep_total != null)} con le puntate contate`,
   );
 }
