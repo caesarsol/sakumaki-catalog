@@ -18,7 +18,8 @@ import type { SeriesObject } from "./api";
 const dataDir = `${import.meta.dir}/../data`;
 const MAL_CLIENT_ID = Bun.env.MAL_CLIENT_ID;
 const ANILIST_PAUSE_MS = 2100;
-const MAL_PAUSE_MS = MAL_CLIENT_ID ? 500 : 1100;
+// MAL non dichiara un limite e a chi esagera risponde 403: meglio un'ora di run che un client bloccato.
+const MAL_PAUSE_MS = MAL_CLIENT_ID ? 800 : 1100;
 
 type Entry = { id: number; idMal: number | null; meanScore: number | null; votes: number };
 export type ExternalRating = { score: number; votes: number; entries: number };
@@ -101,7 +102,7 @@ async function malScore(id: number): Promise<{ score: number | null; votes: numb
       ? await fetch(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID }, signal: AbortSignal.timeout(30_000) })
       : await fetch(`https://api.jikan.moe/v4/anime/${id}`, { signal: AbortSignal.timeout(30_000) });
     if (res.status === 404) return null;
-    if (res.status === 429 || res.status >= 500) {
+    if (res.status === 429 || res.status === 403 || res.status >= 500) {
       await Bun.sleep(5000 * attempt);
       continue;
     }
