@@ -10,8 +10,10 @@ import type { SeriesObject } from "./api";
  * sul numero di voti di ciascuna.
  *
  * MAL: senza chiave passa da Jikan, che rilegge le pagine di MAL; con `MAL_CLIENT_ID` (si registra un
- * client su myanimelist.net/apiconfig) usa l'API ufficiale. Tutto con il proprio ritmo, sotto i limiti
- * dichiarati: AniList 30 richieste al minuto da anonimi, Jikan 60. Il 18 ottobre 2026 Jikan ha rifiutato
+ * client su myanimelist.net/apiconfig) usa l'API ufficiale. Le due fonti girano in parallelo, ognuna col
+ * suo ritmo: man mano che AniList restituisce voci abbinate, i loro id MAL finiscono in una coda che un
+ * secondo ciclo svuota. Il run dura quanto la più lenta delle due, non la somma. Limiti dichiarati:
+ * AniList 30 richieste al minuto da anonimi, Jikan 60. Il 18 ottobre 2026 Jikan ha rifiutato
  * la connessione dal runner di Actions: se le prime richieste falliscono tutte MAL si salta, e la pagina
  * lascia la colonna vuota invece di segnare ogni serie come non abbinata.
  */
@@ -69,24 +71,36 @@ const ANIME = `query ($page: Int, $from: FuzzyDateInt, $to: FuzzyDateInt) { Page
   media(type: ANIME, sort: ID, startDate_greater: $from, startDate_lesser: $to) { id idMal meanScore stats { scoreDistribution { amount } } externalLinks { url } } } }`;
 const matched = new Map<string, Entry[]>();
 let pages = 0;
-const lastYear = new Date().getFullYear() + 1;
-for (let year = 1917, page = 1; year <= lastYear; ) {
-  const { Page } = await post(ANIME, { page, from: (year - 1) * 10000 + 9999, to: (year + 1) * 10000 });
-  pages++;
-  for (const m of Page.media) {
-    const series = m.externalLinks.map((l: { url: string }) => seriesOf(l.url)).find(Boolean);
-    if (!series) continue;
-    const votes = m.stats?.scoreDistribution?.reduce((a: number, d: { amount: number }) => a + d.amount, 0) ?? 0;
-    if (!matched.has(series)) matched.set(series, []);
-    matched.get(series)!.push({ id: m.id, idMal: m.idMal, meanScore: m.meanScore, votes });
+// Gli id MAL delle voci abbinate, in attesa del ciclo MAL; `anilistDone` gli dice quando non ne arrivano più.
+const malQueue: number[] = [];
+const malSeen = new Set<number>();
+let anilistDone = false;
+
+async function scanAniList() {
+  const lastYear = new Date().getFullYear() + 1;
+  try {
+    for (let year = 1917, page = 1; year <= lastYear; ) {
+      const { Page } = await post(ANIME, { page, from: (year - 1) * 10000 + 9999, to: (year + 1) * 10000 });
+      pages++;
+      for (const m of Page.media) {
+        const series = m.externalLinks.map((l: { url: string }) => seriesOf(l.url)).find(Boolean);
+        if (!series) continue;
+        const votes = m.stats?.scoreDistribution?.reduce((a: number, d: { amount: number }) => a + d.amount, 0) ?? 0;
+        if (!matched.has(series)) matched.set(series, []);
+        matched.get(series)!.push({ id: m.id, idMal: m.idMal, meanScore: m.meanScore, votes });
+        if (m.idMal && !malSeen.has(m.idMal)) malSeen.add(m.idMal), malQueue.push(m.idMal);
+      }
+      if (Page.pageInfo.hasNextPage) page++;
+      else {
+        if (year % 10 === 0) console.log(`AniList: fino al ${year}, ${pages} pagine, ${matched.size} serie abbinate, ${malQueue.length} id in coda per MAL`);
+        year++;
+        page = 1;
+      }
+      await Bun.sleep(ANILIST_PAUSE_MS);
+    }
+  } finally {
+    anilistDone = true; // anche se AniList fallisce, il ciclo MAL deve poter finire
   }
-  if (Page.pageInfo.hasNextPage) page++;
-  else {
-    if (year % 10 === 0) console.log(`AniList: fino al ${year}, ${pages} pagine, ${matched.size} serie abbinate`);
-    year++;
-    page = 1;
-  }
-  await Bun.sleep(ANILIST_PAUSE_MS);
 }
 
 /** Media dei voti delle voci, pesata sui loro votanti; le voci senza voti non contano. */
@@ -116,19 +130,31 @@ async function malScore(id: number): Promise<{ score: number | null; votes: numb
   return null;
 }
 
-const malIds = [...new Set([...matched.values()].flat().map((e) => e.idMal).filter((x): x is number => !!x))];
 const mal = new Map<number, { score: number | null; votes: number }>();
+let malDone = 0;
 let malFailed = 0;
 let malError = "";
 const malStart = Date.now();
-for (const [i, id] of malIds.entries()) {
-  const r = await malScore(id).catch((e: Error) => ((malError = e.message), null));
-  if (r) mal.set(id, r);
-  else malFailed++;
-  if (i === 4 && mal.size === 0) break; // cinque fallimenti su cinque: la fonte non risponde, inutile insistere per un'ora
-  if ((i + 1) % 250 === 0) console.log(`MAL: ${i + 1}/${malIds.length} in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}`);
-  await Bun.sleep(MAL_PAUSE_MS);
+
+/** Svuota la coda degli id MAL finché AniList ne produce; se la coda è vuota aspetta la pagina successiva. */
+async function scanMal() {
+  while (!anilistDone || malQueue.length) {
+    const id = malQueue.shift();
+    if (id === undefined) {
+      await Bun.sleep(1000);
+      continue;
+    }
+    const r = await malScore(id).catch((e: Error) => ((malError = e.message), null));
+    if (r) mal.set(id, r);
+    else malFailed++;
+    malDone++;
+    if (malDone === 5 && mal.size === 0) return; // cinque fallimenti su cinque: la fonte non risponde, inutile insistere
+    if (malDone % 250 === 0) console.log(`MAL: ${malDone} lette (${malQueue.length} in coda) in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}`);
+    await Bun.sleep(MAL_PAUSE_MS);
+  }
 }
+
+await Promise.all([scanAniList(), scanMal()]);
 const malAvailable = mal.size > 0;
 
 const out: ExternalRatings = { mal_available: malAvailable, series: {} };
@@ -142,5 +168,5 @@ const count = (k: "al" | "mal") => Object.values(out.series).filter((r) => r[k])
 console.log(
   `AniList: ${pages} pagine, ${matched.size} serie su ${catalog.length} abbinate, ${count("al")} con voto. ` +
     `MAL (${MAL_CLIENT_ID ? "API ufficiale" : "Jikan"}): ` +
-    (malAvailable ? `${malIds.length} voci in ${Math.round((Date.now() - malStart) / 60000)} min, ${malFailed} non lette, rifiuti ${JSON.stringify(malRefused)}, ${count("mal")} serie con voto.` : `non raggiungibile (${malError || "nessun voto"}), colonna vuota.`),
+    (malAvailable ? `${malDone} voci in ${Math.round((Date.now() - malStart) / 60000)} min, ${malFailed} non lette, rifiuti ${JSON.stringify(malRefused)}, ${count("mal")} serie con voto.` : `non raggiungibile (${malError || "nessun voto"}), colonna vuota.`),
 );
