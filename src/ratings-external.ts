@@ -37,13 +37,13 @@ function pacer(ms: number) {
   };
 }
 /** fetch che riprova gli errori di rete (connessione chiusa, timeout): uno solo non deve far fallire il run. */
-async function fetchRetry(url: string, init: RequestInit, onRetry: () => void): Promise<Response> {
+async function fetchRetry(url: string, init: RequestInit, onRetry: (kind: string) => void, timeoutMs = 30_000): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     } catch (e) {
       if (attempt === 5) throw e;
-      onRetry();
+      onRetry((e as { code?: string }).code ?? (e as Error).name); // "TimeoutError", "ECONNRESET"…
       await Bun.sleep(10_000 * attempt);
     }
   }
@@ -137,13 +137,15 @@ function weightedMean(parts: { score: number | null; votes: number }[]): Externa
   return { score: Math.round((voted.reduce((a, p) => a + p.score! * p.votes, 0) / votes) * 100) / 100, votes, entries: voted.length };
 }
 
-const malRefused: Record<string, number> = {}; // risposte 429, 403 e 5xx per codice, ed errori di rete
+const malRefused: Record<string, number> = {}; // risposte 429, 403 e 5xx per codice, ed errori di rete per tipo
+// Una risposta di MAL arriva in 0,7 s: oltre 10 s la connessione è persa, e aspettarne 30 bloccava un ciclo.
+const MAL_TIMEOUT_MS = 10_000;
 const refused = (k: string | number) => (malRefused[k] = (malRefused[k] ?? 0) + 1);
 async function malScore(id: number): Promise<{ score: number | null; votes: number } | null> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const res = MAL_CLIENT_ID
-      ? await fetchRetry(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID } }, () => refused("rete"))
-      : await fetchRetry(`https://api.jikan.moe/v4/anime/${id}`, {}, () => refused("rete"));
+      ? await fetchRetry(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID } }, (k) => refused(k), MAL_TIMEOUT_MS)
+      : await fetchRetry(`https://api.jikan.moe/v4/anime/${id}`, {}, (k) => refused(k), MAL_TIMEOUT_MS);
     if (res.status === 404) return null;
     if (res.status === 429 || res.status === 403 || res.status >= 500) {
       refused(res.status);
@@ -165,8 +167,10 @@ const malStart = Date.now();
 
 /**
  * Svuota la coda degli id MAL finché AniList ne produce; se la coda è vuota aspetta la pagina successiva.
- * Due cicli con un turno comune: una chiamata parte ogni MAL_PAUSE_MS anche se la precedente non ha
- * ancora risposto (la risposta di MAL impiega circa 0,7 s, e con un ciclo solo il ritmo era la metà).
+ * Quattro cicli con un turno comune: una chiamata parte ogni MAL_PAUSE_MS anche se le precedenti non hanno
+ * ancora risposto. Il 19 ottobre 2026, con due cicli, 2620 voci hanno preso 61 minuti invece di 22: 94
+ * errori di rete, ognuno dei quali fermava un ciclo per decine di secondi. Con quattro, uno fermo non
+ * rallenta gli altri; il turno comune tiene comunque il ritmo complessivo a una chiamata ogni 0,5 s.
  */
 const malTurn = pacer(MAL_PAUSE_MS);
 let malGaveUp = false;
@@ -187,7 +191,7 @@ async function scanMal() {
   }
 }
 
-await Promise.all([scanAniList(), scanMal(), scanMal()]);
+await Promise.all([scanAniList(), ...Array.from({ length: 4 }, scanMal)]);
 const malAvailable = mal.size > 0;
 
 const out: ExternalRatings = { mal_available: malAvailable, series: {} };
