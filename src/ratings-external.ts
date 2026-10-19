@@ -18,8 +18,9 @@ import type { SeriesObject } from "./api";
 const dataDir = `${import.meta.dir}/../data`;
 const MAL_CLIENT_ID = Bun.env.MAL_CLIENT_ID;
 const ANILIST_PAUSE_MS = 2100;
-// MAL non dichiara un limite e a chi esagera risponde 403: meglio un'ora di run che un client bloccato.
-const MAL_PAUSE_MS = MAL_CLIENT_ID ? 800 : 1100;
+// MAL non dichiara un limite e a chi esagera risponde 403 o 429: i rifiuti si contano e finiscono nel log,
+// così si vede se la pausa è troppo corta.
+const MAL_PAUSE_MS = MAL_CLIENT_ID ? 500 : 1100;
 
 type Entry = { id: number; idMal: number | null; meanScore: number | null; votes: number };
 export type ExternalRating = { score: number; votes: number; entries: number };
@@ -96,6 +97,7 @@ function weightedMean(parts: { score: number | null; votes: number }[]): Externa
   return { score: Math.round((voted.reduce((a, p) => a + p.score! * p.votes, 0) / votes) * 100) / 100, votes, entries: voted.length };
 }
 
+const malRefused: Record<number, number> = {}; // risposte 429, 403 e 5xx, per codice
 async function malScore(id: number): Promise<{ score: number | null; votes: number } | null> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const res = MAL_CLIENT_ID
@@ -103,6 +105,7 @@ async function malScore(id: number): Promise<{ score: number | null; votes: numb
       : await fetch(`https://api.jikan.moe/v4/anime/${id}`, { signal: AbortSignal.timeout(30_000) });
     if (res.status === 404) return null;
     if (res.status === 429 || res.status === 403 || res.status >= 500) {
+      malRefused[res.status] = (malRefused[res.status] ?? 0) + 1;
       await Bun.sleep(5000 * attempt);
       continue;
     }
@@ -117,12 +120,13 @@ const malIds = [...new Set([...matched.values()].flat().map((e) => e.idMal).filt
 const mal = new Map<number, { score: number | null; votes: number }>();
 let malFailed = 0;
 let malError = "";
+const malStart = Date.now();
 for (const [i, id] of malIds.entries()) {
   const r = await malScore(id).catch((e: Error) => ((malError = e.message), null));
   if (r) mal.set(id, r);
   else malFailed++;
   if (i === 4 && mal.size === 0) break; // cinque fallimenti su cinque: la fonte non risponde, inutile insistere per un'ora
-  if ((i + 1) % 250 === 0) console.log(`MAL: ${i + 1}/${malIds.length}`);
+  if ((i + 1) % 250 === 0) console.log(`MAL: ${i + 1}/${malIds.length} in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}`);
   await Bun.sleep(MAL_PAUSE_MS);
 }
 const malAvailable = mal.size > 0;
@@ -138,5 +142,5 @@ const count = (k: "al" | "mal") => Object.values(out.series).filter((r) => r[k])
 console.log(
   `AniList: ${pages} pagine, ${matched.size} serie su ${catalog.length} abbinate, ${count("al")} con voto. ` +
     `MAL (${MAL_CLIENT_ID ? "API ufficiale" : "Jikan"}): ` +
-    (malAvailable ? `${malIds.length} voci, ${malFailed} non lette, ${count("mal")} serie con voto.` : `non raggiungibile (${malError || "nessun voto"}), colonna vuota.`),
+    (malAvailable ? `${malIds.length} voci in ${Math.round((Date.now() - malStart) / 60000)} min, ${malFailed} non lette, rifiuti ${JSON.stringify(malRefused)}, ${count("mal")} serie con voto.` : `non raggiungibile (${malError || "nessun voto"}), colonna vuota.`),
 );
