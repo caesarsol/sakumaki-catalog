@@ -119,7 +119,7 @@ async function scanAniList() {
       }
       if (Page.pageInfo.hasNextPage) page++;
       else {
-        if (year % 10 === 0) console.log(`AniList: fino al ${year}, ${pages} pagine, ${matched.size} serie abbinate, ${malQueue.length} id in coda per MAL, ${anilistRetries} errori di rete ritentati`);
+        if (year % 10 === 0) console.log(`AniList: fino al ${year}, ${pages} pagine, ${matched.size} serie abbinate; MAL: ${malSeen.size} id trovati, ${malDone} letti, ${malQueue.length} in attesa; ${anilistRetries} errori di rete ritentati`);
         year++;
         page = 1;
       }
@@ -183,7 +183,7 @@ async function scanMal() {
     else malFailed++;
     malDone++;
     if (malDone >= 5 && mal.size === 0) malGaveUp = true; // cinque fallimenti su cinque: la fonte non risponde, inutile insistere
-    if (malDone % 250 === 0) console.log(`MAL: ${malDone} lette (${malQueue.length} in coda) in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}`);
+    if (malDone % 250 === 0) console.log(`MAL: ${malDone} letti su ${malSeen.size} trovati finora (${malQueue.length} in attesa) in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}`);
   }
 }
 
