@@ -20,6 +20,13 @@ if ((await $`git ls-remote --exit-code --heads origin history`.nothrow().quiet()
   await $`git worktree add --orphan -b history ${dir}`.quiet(); // la prima volta
 }
 
+// Quando arriva il catalogo, i suoi file non passati sono di paesi tolti da COUNTRIES (il Giappone, il 20 ottobre
+// 2026): senza toglierli resterebbero nell'ultimo commit come se fossero aggiornati. Il run dei voti non li tocca.
+const names = new Set(files.map((f) => f.split("/").at(-1)!));
+if ([...names].some((n) => n.startsWith("catalog-")))
+  for (const name of await Array.fromAsync(new Bun.Glob("catalog-*.ndjson").scan(dir)))
+    if (!names.has(name)) await Bun.file(`${dir}/${name}`).delete();
+
 const idOf = (line: string) => (JSON.parse(line) as { id?: string }).id ?? "";
 for (const file of files) {
   const name = file.split("/").at(-1)!;
