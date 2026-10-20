@@ -30,8 +30,9 @@ export async function seasonsByCountry(token: AnonToken, seriesIds: string[], pr
           out.set(id, await cms<Season>(token, `series/${id}/seasons`, "en-US", proxy));
           break;
         } catch (e) {
-          const err = e as { status?: number; code?: string; name?: string };
-          count(err.status ?? err.code ?? err.name ?? "?"); // 407: il proxy rifiuta l'autenticazione
+          const err = e as { status?: number; code?: unknown; name?: string };
+          // 407: il proxy rifiuta l'autenticazione; un timeout ha `code` 23, si conta col nome
+          count(err.status ?? (typeof err.code === "string" ? err.code : err.name) ?? "?");
           if (err.status === 404) break; // serie sparita fra il browse e adesso: non c'è niente da ritentare
           await Bun.sleep(5000 * attempt);
         }
