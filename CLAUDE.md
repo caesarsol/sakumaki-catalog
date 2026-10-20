@@ -30,7 +30,8 @@ stanno in JSON dentro `<script id="data">`: da lì si legge tutto, id e stato wa
 ## Interrogare l'API vera: il ramo della sonda
 
 Da Claude Code sul web l'API del servizio, AniList, Jikan e NordVPN sono irraggiungibili, il dispatch dei
-workflow via MCP risponde 403 e `gh run view --log` è rifiutato dal proxy. Funzionano due cose: il push su
+workflow risponde 403 sia via MCP sia con `gh workflow run` (anche annullare un run: `gh run cancel`), e
+`gh run view --log` è rifiutato dal proxy. Funzionano due cose: il push su
 un ramo `claude/…` e la lettura dei log con l'MCP (`get_job_logs`, con l'id del job da
 `gh api repos/caesarsol/sakumaki-catalog/actions/runs/<run>/jobs`). Per questo esiste il ramo
 **`claude/probe-tmp`**, da tenere: il suo `.github/workflows/probe.yml` parte a ogni push sul ramo, con i
