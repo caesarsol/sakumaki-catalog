@@ -6,20 +6,23 @@ on:
     branches: [claude/probe-tmp]
 
 permissions:
-  contents: read
+  contents: write
+  actions: read
 
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      NORD_USER: ${{ secrets.NORD_USER }}
-      NORD_PASS: ${{ secrets.NORD_PASS }}
-      API_BASE: ${{ secrets.API_BASE }}
+      GH_TOKEN: ${{ github.token }}
+      R: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: |
           bun install --frozen-lockfile
+          gh run download 39473956174 -R "$R" --name catalog --dir data
       - run: |
-          bun run src/probe.ts
+          bun run src/history.ts data/catalog-??.ndjson data/catalog-seasons-*.ndjson
+          git fetch -q origin history
+          git log --stat --format='%h %s' origin/history | head -30
