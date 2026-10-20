@@ -69,7 +69,7 @@ non valido e il run fallisce senza job.
 
 | workflow | quando | cosa fa |
 |---|---|---|
-| `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN → artifact `catalog`, poi lancia `watchlist.yml` |
+| `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN, 5 paesi alla volta con i login scaglionati, con le stagioni di ogni serie viste da ogni paese → artifact `catalog`, poi lancia `watchlist.yml` e `ratings.yml` |
 | `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN → artifact `watchlist`, poi lancia `deploy.yml` |
 | `ratings.yml` | a fine catalog | voti AniList e MAL abbinati per id alle serie → artifact `ratings`, poi lancia `deploy.yml` |
 | `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | scarica gli artifact, genera la pagina, pubblica su Pages |
