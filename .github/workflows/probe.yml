@@ -15,6 +15,13 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       R: ${{ github.repository }}
+      API_BASE: ${{ secrets.API_BASE }}
+      NORD_USER: ${{ secrets.NORD_USER }}
+      NORD_PASS: ${{ secrets.NORD_PASS }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
       - run: |
-          gh workflow run ratings.yml --ref main -R "$R"
+          bun install --frozen-lockfile
+      - run: |
+          bun run src/probe.ts GYQ4MKDZ6
