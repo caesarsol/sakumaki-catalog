@@ -136,16 +136,20 @@ export async function fetchBookmarks(token: Token, locale = "en-US"): Promise<{ 
   return items;
 }
 
-/** Una chiamata CMS (stagioni, puntate) con il token dell'account: risponde in un decimo di secondo, è roba in cache. */
-export async function cms<T>(token: AnonToken, path: string, locale = "en-US"): Promise<T[]> {
+/**
+ * Una chiamata CMS (stagioni, puntate): risponde in un decimo di secondo, è roba in cache. Il proxy si può
+ * passare per chiamata, perché il catalogo legge più paesi in parallelo, ognuno dal suo. L'errore porta il
+ * codice HTTP in `status`, così chi chiama sa se vale la pena riprovare.
+ */
+export async function cms<T>(token: AnonToken, path: string, locale = "en-US", proxy?: string): Promise<T[]> {
   const url = new URL(`${BASE}/content/v2/cms/${path}`);
   url.search = new URLSearchParams({ locale }).toString();
   const res = await fetch(url, {
-    proxy: defaultProxy,
+    proxy: proxy ?? defaultProxy,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
   });
-  if (!res.ok) throw new Error(`cms failed: ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`cms failed: ${res.status}`), { status: res.status });
   return ((await res.json()) as { data: T[] }).data;
 }
 

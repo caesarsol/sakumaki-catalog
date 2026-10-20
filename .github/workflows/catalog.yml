@@ -24,7 +24,7 @@ jobs:
         continue-on-error: true # al primo run non c'è nessun artifact
         env:
           GH_TOKEN: ${{ github.token }}
-      - run: bun run catalog # token anonimo, 5 minuti fra un paese e l'altro: circa un'ora
+      - run: bun run catalog # 5 paesi alla volta, login a distanza casuale; per ogni paese le serie e le stagioni di ognuna
         continue-on-error: true # un paese fallito non blocca gli altri e tiene il catalog-<ISO2>.ndjson della settimana scorsa
       - run: bun run merge
       - uses: actions/upload-artifact@v4
