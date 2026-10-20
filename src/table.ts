@@ -2,6 +2,7 @@ import type { SeriesObject, WatchlistItem } from "./api";
 import { COUNTRIES } from "./countries";
 import { progressBySeries, type Progress } from "./watchlist-progress";
 import type { ExternalRatings } from "./ratings-external";
+import type { Availability } from "./merge";
 const SITE_BASE = Bun.env.SITE_BASE;
 if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
@@ -13,11 +14,17 @@ if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)"
 const MIN_RATING = Number(Bun.env.MIN_RATING ?? 0); // sull'average a un decimale dell'API
 const WEIGHT_VOTES = Number(Bun.env.WEIGHT_VOTES ?? 10_000); // `m` della media bayesiana (formula IMDb)
 const dataDir = `${import.meta.dir}/../data`;
+// Il paese da cui si guarda: Stagioni ed Episodi contano quel che è guardabile qui, gli altri paesi stanno nel suggerimento.
+const HOME = "IT";
+// Una bandiera si sbiadisce quando in quel paese manca più di questa quota delle puntate: sotto, di solito
+// sono un film o uno speciale, e segnarli tutti renderebbe il segnale inutile.
+const PARTIAL_SHARE = 0.1;
 
 const readNdjson = async <T>(path: string): Promise<T[]> =>
   (await Bun.file(path).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
-const catalog = await readNdjson<SeriesObject & { countries: string[] }>(`${dataDir}/catalog.ndjson`);
+type Merged = SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number } };
+const catalog = await readNdjson<Merged>(`${dataDir}/catalog.ndjson`);
 const countries = COUNTRIES.filter((c) => catalog.some((s) => s.countries.includes(c.iso2))); // solo i paesi presenti nei dati: un download fallito non lascia una colonna vuota
 let progress: Record<string, Progress> = {};
 const progressFile = Bun.file(`${dataDir}/watchlist-progress.json`); // in CI arriva solo questo (vedi watchlist-progress.ts)
@@ -112,8 +119,16 @@ const rows = top.map((s) => ({
   votes: s.rating.total,
   stars: starShares(s),
   year: s.series_metadata.series_launch_year,
-  seasons: s.series_metadata.season_count,
-  episodes: s.series_metadata.episode_count,
+  // Senza le stagioni per paese (artifact di prima) restano i conteggi del catalogo, uguali ovunque.
+  seasons: s.availability?.[HOME]?.seasons ?? s.union?.seasons ?? s.series_metadata.season_count,
+  episodes: s.availability?.[HOME]?.episodes ?? s.union?.episodes ?? s.series_metadata.episode_count,
+  episodes_all: s.union?.episodes ?? s.series_metadata.episode_count,
+  // Solo i paesi a cui manca una parte sostanziosa, già col testo del suggerimento: la pagina resta leggera.
+  partial: Object.fromEntries(
+    Object.entries(s.availability ?? {})
+      .filter(([, a]) => s.union && s.union.episodes - a.episodes > PARTIAL_SHARE * s.union.episodes)
+      .map(([c, a]) => [c, `${a.episodes} puntate su ${s.union!.episodes}; mancano ${a.missing.map(([t, n]) => `${t} (${n})`).join(", ")}`]),
+  ),
   genres: genresOf(s),
   maturity: s.series_metadata.maturity_ratings.join(", "),
   simulcast: s.series_metadata.is_simulcast,
