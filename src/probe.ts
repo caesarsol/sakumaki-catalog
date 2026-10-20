@@ -3,7 +3,9 @@ import { COUNTRIES } from "./countries";
 import { randomProxy } from "./nordvpn";
 
 // Sonda: per le prime 100 serie per V Bayes disponibili in Italia, le stagioni viste dall'Italia e dagli USA,
-// con i due paesi in parallelo (un proxy ciascuno) per misurare i tempi. Stampa solo dati pubblici del
+// con i due paesi in parallelo (un proxy ciascuno) per misurare i tempi. I login sono scaglionati con un
+// ritardo casuale, perché una raffica di autenticazioni ha già fatto rispondere 407 ai proxy Nord per
+// mezz'ora (vedi catalog.ts); le chiamate dopo il login vanno in parallelo. Stampa solo dati pubblici del
 // catalogo, mai host o token.
 type Row = { id: string; title: string; countries: string[]; rating_weighted: number; series_metadata: { season_count: number; episode_count: number } };
 type Season = { id: string; season_sequence_number: number; number_of_episodes: number; title: string };
@@ -15,11 +17,13 @@ const WORKERS = 2; // chiamate in volo per paese
 const scored: Row[] = (await Bun.file("data/catalog-scored.ndjson").text()).trim().split("\n").map((l) => JSON.parse(l));
 const top = scored.filter((s) => s.countries.includes("IT")).slice(0, N);
 
-async function country(iso2: string) {
+async function country(iso2: string, loginDelayMs: number) {
+  await Bun.sleep(loginDelayMs);
   const c = COUNTRIES.find((x) => x.iso2 === iso2)!;
   const proxy = (await randomProxy(c.nordId)).url;
   const token: AnonToken = await loginAnonymous(proxy);
   if (token.country !== iso2) throw new Error(`${iso2}: visti come ${token.country}`);
+  console.log(`${iso2}: login dopo ${(loginDelayMs / 1000).toFixed(1)} s`);
   const out = new Map<string, Season[]>();
   const errors: Record<string, number> = {};
   let next = 0, i = 0;
@@ -48,7 +52,7 @@ async function country(iso2: string) {
   return out;
 }
 
-const [itMap, usMap] = await Promise.all([country("IT"), country("US")]);
+const [itMap, usMap] = await Promise.all([country("IT", 0), country("US", 5000 + Math.random() * 10000)]);
 const eps = (ss: Season[]) => ss.reduce((a, x) => a + x.number_of_episodes, 0);
 let full = 0;
 const partial: string[] = [];
