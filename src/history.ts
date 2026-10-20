@@ -38,6 +38,8 @@ if (!changed) {
   const date = new Date().toISOString().slice(0, 10);
   await $`git -C ${dir} -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm ${`dati del ${date}: ${files.map((f) => f.split("/").at(-1)).join(", ")}`}`;
   await $`git -C ${dir} push -q origin history`;
-  const size = (await $`git -C ${dir} count-objects -vH`.text()).match(/size-pack: (.*)/)?.[1];
-  console.log(`storico: commit sul ramo history con ${files.length} file (pacchetto locale ${size})`);
+  // Il pacchetto scaricato col fetch a profondità 1 non conta (e nel worktree risulta 0): gli oggetti del
+  // commit nuovo restano sciolti, compressi ma senza delta, quindi questa è una stima per eccesso.
+  const size = (await $`git -C ${dir} count-objects -vH`.text()).match(/^size: (.*)$/m)?.[1];
+  console.log(`storico: commit sul ramo history con ${files.length} file (oggetti nuovi ${size}, senza delta)`);
 }
