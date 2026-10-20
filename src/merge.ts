@@ -12,10 +12,12 @@ import { COUNTRIES } from "./countries";
  * stessa stagione può avere id diversi da un paese all'altro ("Bunny Girl Senpai" in Italia e negli USA).
  */
 export type Availability = { seasons: number; episodes: number; missing: [title: string, episodes: number][] };
+/** Per il dettaglio di una serie: le stagioni dell'unione in ordine, e per ogni paese le puntate di ciascuna (0 se lì manca). */
+export type SeasonMatrix = { seasons: [title: string, episodes: number][]; by: Record<string, number[]> };
 const dataDir = `${import.meta.dir}/../data`;
 const readNdjson = async <T>(path: string): Promise<T[]> => (await Bun.file(path).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
-const merged = new Map<string, SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number } }>();
+const merged = new Map<string, SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number }; matrix?: SeasonMatrix }>();
 const seasonsBy = new Map<string, Map<string, Season[]>>(); // serie → paese → stagioni
 let found = 0;
 for (const { iso2 } of COUNTRIES) {
@@ -45,8 +47,12 @@ for (const [id, byCountry] of seasonsBy) {
   const s = merged.get(id);
   if (!s) continue;
   const union = new Map<string, [title: string, episodes: number]>();
+  const order = new Map<string, number>(); // il primo posto in cui la stagione compare, fra i paesi
   for (const seasons of byCountry.values())
-    for (const x of seasons) if ((union.get(key(x.title))?.[1] ?? -1) < x.number_of_episodes) union.set(key(x.title), [x.title, x.number_of_episodes]);
+    for (const x of seasons) {
+      if ((union.get(key(x.title))?.[1] ?? -1) < x.number_of_episodes) union.set(key(x.title), [x.title, x.number_of_episodes]);
+      order.set(key(x.title), Math.min(order.get(key(x.title)) ?? Infinity, x.season_sequence_number));
+    }
   const unionEpisodes = [...union.values()].reduce((a, [, n]) => a + n, 0);
   s.union = { seasons: union.size, episodes: unionEpisodes };
   s.availability = {};
@@ -56,6 +62,14 @@ for (const [id, byCountry] of seasonsBy) {
     s.availability[iso2] = { seasons: seasons.length, episodes: seasons.reduce((a, x) => a + x.number_of_episodes, 0), missing };
     if (missing.length) partial++;
   }
+  const keys = [...union.keys()].sort((a, b) => order.get(a)! - order.get(b)!);
+  s.matrix = {
+    seasons: keys.map((k) => union.get(k)!),
+    by: Object.fromEntries([...byCountry].map(([iso2, seasons]) => {
+      const eps = new Map(seasons.map((x) => [key(x.title), x.number_of_episodes]));
+      return [iso2, keys.map((k) => eps.get(k) ?? 0)];
+    })),
+  };
 }
 const all = [...merged.values()];
 await Bun.write(`${dataDir}/catalog.ndjson`, all.map((s) => JSON.stringify(s)).join("\n") + "\n");
