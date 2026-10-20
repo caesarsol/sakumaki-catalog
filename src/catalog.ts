@@ -52,21 +52,32 @@ async function catalogFrom(country: Country): Promise<{ series: SeriesObject[]; 
 }
 
 const only = Bun.argv.slice(2); // es. `bun run catalog IN AU` per rifare solo alcuni paesi
+// I file di paesi tolti da COUNTRIES (il Giappone): l'artifact della settimana prima li riporterebbe avanti per sempre.
+if (!only.length)
+  for (const name of await Array.fromAsync(new Bun.Glob("catalog-*.ndjson").scan(dataDir))) {
+    const iso2 = name.match(/^catalog-(?:seasons-)?([A-Z]{2})\.ndjson$/)?.[1];
+    if (iso2 && !COUNTRIES.some((c) => c.iso2 === iso2)) await Bun.file(`${dataDir}/${name}`).delete();
+  }
 const queue = [...(only.length ? COUNTRIES.filter((c) => only.includes(c.iso2)) : COUNTRIES)];
 const failed: string[] = [];
 const t0 = Date.now();
+async function run(country: Country) {
+  const { series, seasons } = await catalogFrom(country);
+  await Bun.write(`${dataDir}/catalog-${country.iso2}.ndjson`, ndjson(series));
+  await Bun.write(`${dataDir}/catalog-seasons-${country.iso2}.ndjson`, ndjson([...seasons].map(([id, data]) => ({ id, seasons: data }))));
+}
 async function worker() {
-  for (let country = queue.shift(); country; country = queue.shift()) {
-    try {
-      const { series, seasons } = await catalogFrom(country);
-      await Bun.write(`${dataDir}/catalog-${country.iso2}.ndjson`, ndjson(series));
-      await Bun.write(`${dataDir}/catalog-seasons-${country.iso2}.ndjson`, ndjson([...seasons].map(([id, data]) => ({ id, seasons: data }))));
-    } catch {
-      failed.push(country.iso2);
-    }
-  }
+  for (let country = queue.shift(); country; country = queue.shift()) await run(country).catch(() => failed.push(country.iso2));
 }
 await Promise.all(Array.from({ length: PARALLEL }, worker));
+// Un ultimo tentativo per i paesi falliti, da soli, quando gli altri hanno finito: il 20 ottobre 2026 l'Australia
+// ha preso 407 dal proxy a metà run, con gli altri paesi ancora attivi, a entrambi i tentativi.
+for (const iso2 of failed.splice(0)) {
+  const country = COUNTRIES.find((c) => c.iso2 === iso2)!;
+  console.log(`${iso2}: ultimo tentativo, a run finito`);
+  await Bun.sleep(RETRY_PAUSE_MS);
+  await run(country).catch(() => failed.push(iso2));
+}
 console.log(`catalogo letto in ${Math.round((Date.now() - t0) / 60000)} minuti, ${PARALLEL} paesi alla volta`);
 if (failed.length) {
   console.error(`paesi falliti: ${failed.join(", ")}`);
