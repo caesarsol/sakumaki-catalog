@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # solo per lo storico nel ramo history
   actions: write # per scaricare l'artifact precedente e lanciare watchlist.yml a fine run
 
 jobs:
@@ -32,6 +32,8 @@ jobs:
           name: catalog
           path: data/catalog*.ndjson # merge più i file per paese, che la settimana prossima fanno da riserva
           retention-days: 90
+      - run: bun run src/history.ts data/catalog-??.ndjson data/catalog-seasons-*.ndjson # storico nel ramo history: git salva solo cosa cambia, e non scade
+        continue-on-error: true # lo storico non deve fermare watchlist e voti
       - run: gh workflow run watchlist.yml # ricostruisce la pagina con il catalogo nuovo
         env:
           GH_TOKEN: ${{ github.token }}

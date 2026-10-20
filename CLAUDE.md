@@ -60,6 +60,9 @@ non valido e il run fallisce senza job.
 - La tabella è virtualizzata (TanStack Virtual, `page-vendor.ts` impacchettato da `table.ts`): nella pagina
   ci sono solo le righe visibili più un margine. Le righe devono restare tutte alte uguali, `ROW_H` nello
   script e l'altezza di `th, tbody td` nel CSS; una riga "metro" invisibile tiene ferme le larghezze.
+- Il dettaglio di una serie (distribuzione dei voti, matrice stagioni × paesi, voci AniList/MAL) è un
+  pannello che si apre dal basso toccando la riga, non una riga che si allarga: con la virtualizzazione le
+  righe devono restare alte uguali, e sul telefono una matrice dentro una riga non si leggerebbe.
 - `data/` è gitignored: è tutta roba generata o scaricata.
 - Gli host dell'API e del sito stanno nei secret, non nel repo: i log di Actions sono pubblici.
 - Il repo è pubblico, quindi lo sono anche artifact e pagina: fuori da lì tenere tutto ciò che non
@@ -78,6 +81,16 @@ non valido e il run fallisce senza job.
 l'ora legale. In pratica però GitHub fa partire i cron con ore di ritardo: nella settimana del 7 ottobre
 2026 `watchlist` è partito ogni giorno fra le 07:37 e le 08:24 UTC, cioè verso le **10:00 di Roma**.
 La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il giorno seguente.
+
+## Storico: il ramo `history`
+
+A fine `catalog.yml` e `ratings.yml`, `src/history.ts` copia i file di dati nel ramo **`history`** (senza
+niente in comune con main) e ne fa un commit: elenchi e stagioni di ogni paese (`catalog-<ISO2>.ndjson`,
+`catalog-seasons-<ISO2>.ndjson`, risposte intere) e i voti esterni (`ratings-external.json`). Le righe sono
+ordinate per id, così git salva solo cosa cambia; il ramo non scade come gli artifact (90 giorni) e non
+dipende dai workflow programmati, che GitHub spegne dopo 60 giorni senza attività su un repo pubblico.
+Qualsiasi dato a qualsiasi data: `git log history`, `git show <commit>:catalog-seasons-IT.ndjson`.
+Su main non si fa mai merge di `history`.
 
 ## Come la pagina incrocia catalogo e watchlist
 
