@@ -136,6 +136,11 @@
   .stars { display: grid; grid-template-columns: 2em 1fr 3.4em 4em; gap: 3px 6px; align-items: center; font-size: .8rem; font-variant-numeric: tabular-nums; }
   .stars i { display: block; height: 8px; border-radius: 2px; }
   .stars .n { text-align: right; color: var(--muted); }
+  /* Istogramma a 10 colonne (AniList, 10–100): in verticale sta nella larghezza del telefono. */
+  .hist { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; align-items: end; height: 70px; }
+  .hist div { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; font-size: .62rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .hist i { display: block; width: 100%; background: var(--s3); border-radius: 2px 2px 0 0; min-height: 1px; }
+  .hist-x { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; font-size: .62rem; color: var(--muted); text-align: center; margin-top: 2px; }
   .matrix-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
   .sheet table.matrix { width: auto; border-collapse: collapse; font-size: .8rem; }
   .sheet .matrix th, .sheet .matrix td { height: auto; position: static; padding: 3px 5px; cursor: default; background: none; box-shadow: none; border-bottom: 1px solid var(--line); text-align: right; font-weight: normal; }
@@ -496,6 +501,16 @@
   for (const th of ths) th.onclick = () => { clickSort(keyOf(th)); render(); };
 
   /* ---- pannello di dettaglio ------------------------------------------------------------- */
+  /** La distribuzione di AniList della serie, somma delle voci abbinate; niente se non ce ne sono. */
+  function alHist(r) {
+    const dist = Array(10).fill(0);
+    for (const e of r.entries) e.al_dist?.forEach((n, i) => (dist[i] += n));
+    const tot = dist.reduce((a, n) => a + n, 0);
+    if (!tot) return "";
+    const max = Math.max(...dist);
+    return `<h3>Distribuzione su AniList · ${fmt.format(tot)} votanti</h3><div class="hist">${dist.map((n) => `<div><span>${Math.round((n / tot) * 100)}%</span><i style="height:${(n / max) * 80}%"></i></div>`).join("")}</div>` +
+      `<div class="hist-x">${dist.map((_, i) => `<span>${(i + 1) * 10}</span>`).join("")}</div>`;
+  }
   function sheetHtml(r) {
     const stars = [...r.stars.keys()].reverse().map((i) => `<span>${i + 1}★</span><i style="width:${r.stars[i].pct}%;background:var(--s${i + 1})"></i><span class="n">${r.stars[i].pct.toFixed(1)}%</span><span class="n">${r.stars[i].shown}</span>`).join("");
     let matrix = `<p class="sub">Le stagioni per paese arrivano col prossimo catalogo.</p>`;
@@ -513,6 +528,7 @@
       <h2 id="sheetTitle"><a href="${r.url}" target="_blank">${esc(r.title)}</a></h2>
       <div class="sub">${esc(r.genres.join(", "))}</div>
       <h3>Distribuzione dei voti</h3><div class="stars">${stars}</div>
+      ${alHist(r)}
       <h3>Stagioni per paese</h3>${matrix}
       <h3>AniList e MyAnimeList, voce per voce</h3>${entries}`;
   }
