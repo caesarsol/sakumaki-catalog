@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # solo per lo storico nel ramo history
   actions: write # per scaricare l'artifact del catalogo e lanciare deploy.yml a fine run
 
 jobs:
@@ -27,4 +27,6 @@ jobs:
           name: ratings
           path: data/ratings-external.json
           retention-days: 90
+      - run: bun run src/history.ts data/ratings-external.json # storico nel ramo history
+        continue-on-error: true
       - run: gh workflow run deploy.yml

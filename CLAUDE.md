@@ -79,6 +79,16 @@ l'ora legale. In pratica però GitHub fa partire i cron con ore di ritardo: nell
 2026 `watchlist` è partito ogni giorno fra le 07:37 e le 08:24 UTC, cioè verso le **10:00 di Roma**.
 La pagina riflette la watchlist di quell'ora: ciò che cambia dopo compare il giorno seguente.
 
+## Storico: il ramo `history`
+
+A fine `catalog.yml` e `ratings.yml`, `src/history.ts` copia i file di dati nel ramo **`history`** (senza
+niente in comune con main) e ne fa un commit: elenchi e stagioni di ogni paese (`catalog-<ISO2>.ndjson`,
+`catalog-seasons-<ISO2>.ndjson`, risposte intere) e i voti esterni (`ratings-external.json`). Le righe sono
+ordinate per id, così git salva solo cosa cambia; il ramo non scade come gli artifact (90 giorni) e non
+dipende dai workflow programmati, che GitHub spegne dopo 60 giorni senza attività su un repo pubblico.
+Qualsiasi dato a qualsiasi data: `git log history`, `git show <commit>:catalog-seasons-IT.ndjson`.
+Su main non si fa mai merge di `history`.
+
 ## Come la pagina incrocia catalogo e watchlist
 
 - L'incrocio è **per id**, mai per titolo. **Chi è in watchlist lo dicono i segnalibri**
