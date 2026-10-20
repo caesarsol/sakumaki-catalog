@@ -60,7 +60,7 @@ non valido e il run fallisce senza job.
 - La tabella è virtualizzata (TanStack Virtual, `page-vendor.ts` impacchettato da `table.ts`): nella pagina
   ci sono solo le righe visibili più un margine. Le righe devono restare tutte alte uguali, `ROW_H` nello
   script e l'altezza di `th, tbody td` nel CSS; una riga "metro" invisibile tiene ferme le larghezze.
-- Il dettaglio di una serie (numeri, voti stella per stella, matrice stagioni × paesi, voci AniList/MAL) è un
+- Il dettaglio di una serie (distribuzione dei voti, matrice stagioni × paesi, voci AniList/MAL) è un
   pannello che si apre dal basso toccando la riga, non una riga che si allarga: con la virtualizzazione le
   righe devono restare alte uguali, e sul telefono una matrice dentro una riga non si leggerebbe.
 - `data/` è gitignored: è tutta roba generata o scaricata.

@@ -133,10 +133,6 @@
   .sheet .sub { color: var(--muted); font-size: .8rem; }
   .sheet .close { position: absolute; top: 8px; right: 10px; font: inherit; font-size: 1.3rem; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 8px; }
   .sheet h3 { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 6px; }
-  .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.6rem, 1fr)); gap: 6px; }
-  .facts div { background: var(--bg); border-radius: 6px; padding: 4px 7px; }
-  .facts b { display: block; font-size: 1.02rem; font-variant-numeric: tabular-nums; }
-  .facts span { font-size: .7rem; color: var(--muted); }
   .stars { display: grid; grid-template-columns: 2em 1fr 3.4em 4em; gap: 3px 6px; align-items: center; font-size: .8rem; font-variant-numeric: tabular-nums; }
   .stars i { display: block; height: 8px; border-radius: 2px; }
   .stars .n { text-align: right; color: var(--muted); }
@@ -500,15 +496,7 @@
   for (const th of ths) th.onclick = () => { clickSort(keyOf(th)); render(); };
 
   /* ---- pannello di dettaglio ------------------------------------------------------------- */
-  const n2 = (x, d) => (x == null || x < 0 ? "—" : x.toFixed(d));
   function sheetHtml(r) {
-    const fact = (label, value) => `<div><b>${value}</b><span>${label}</span></div>`;
-    const facts = [
-      fact("Voto", n2(r.rating, 3)), fact("V Bayes", n2(r.weighted, 3)), fact("V LimConf", n2(r.lcb, 3)), fact("Votanti", fmt.format(r.votes)),
-      fact("V AniList", n2(r.al, 2)), fact("V MAL", n2(r.mal, 2)), fact("Anno", r.year ?? "—"),
-      fact("Episodi in Italia", r.episodes + (r.episodes !== r.episodes_all ? ` / ${r.episodes_all}` : "")),
-      ...(r.in_watchlist ? [fact(r.wl_fav ? "Watchlist ★" : "Watchlist", r.ep_total ? `${r.ep_done}/${r.ep_total}` : episodeLabel(r) || "✓")] : []),
-    ].join("");
     const stars = [...r.stars.keys()].reverse().map((i) => `<span>${i + 1}★</span><i style="width:${r.stars[i].pct}%;background:var(--s${i + 1})"></i><span class="n">${r.stars[i].pct.toFixed(1)}%</span><span class="n">${r.stars[i].shown}</span>`).join("");
     let matrix = `<p class="sub">Le stagioni per paese arrivano col prossimo catalogo.</p>`;
     if (r.matrix) {
@@ -524,8 +512,7 @@
     return `<button class="close" type="button" aria-label="chiudi">✕</button>
       <h2 id="sheetTitle"><a href="${r.url}" target="_blank">${esc(r.title)}</a></h2>
       <div class="sub">${esc(r.genres.join(", "))}</div>
-      <h3>In breve</h3><div class="facts">${facts}</div>
-      <h3>Voti sul servizio</h3><div class="stars">${stars}</div>
+      <h3>Distribuzione dei voti</h3><div class="stars">${stars}</div>
       <h3>Stagioni per paese</h3>${matrix}
       <h3>AniList e MyAnimeList, voce per voce</h3>${entries}`;
   }
