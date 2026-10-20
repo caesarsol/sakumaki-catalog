@@ -49,10 +49,11 @@ async function fetchRetry(url: string, init: RequestInit, onRetry: (kind: string
   }
 }
 
-type Entry = { id: number; idMal: number | null; meanScore: number | null; votes: number; title: string; format: string | null; year: number | null };
+type Entry = { id: number; idMal: number | null; meanScore: number | null; votes: number; dist: number[]; title: string; format: string | null; year: number | null };
 export type ExternalRating = { score: number; votes: number; entries: number };
 /** Una voce di AniList abbinata alla serie (una stagione, un film, un OVA), con i voti di entrambe le fonti: va nel dettaglio della pagina. */
-export type ExternalEntry = { al: number; mal: number | null; title: string; format: string | null; year: number | null; al_score: number | null; al_votes: number; mal_score: number | null; mal_votes: number };
+// al_dist: votanti di AniList per fascia, 10, 20, … 100 (indice 0 = 10)
+export type ExternalEntry = { al: number; mal: number | null; title: string; format: string | null; year: number | null; al_score: number | null; al_votes: number; al_dist: number[]; mal_score: number | null; mal_votes: number };
 export type ExternalRatings = { mal_available: boolean; series: Record<string, { al?: ExternalRating; mal?: ExternalRating; entries?: ExternalEntry[] }> };
 
 const catalog: SeriesObject[] = (await Bun.file(`${dataDir}/catalog.ndjson`).text()).trim().split("\n").map((l) => JSON.parse(l));
@@ -95,7 +96,7 @@ async function post(query: string, variables: object): Promise<any> {
 // i 5000 risultati di una stessa query (pagina 100) risponde 400. Un anno non arriva mai a 5000. Le date
 // sono interi AAAAMMGG, con 0 per mese e giorno ignoti: l'intervallo li comprende.
 const ANIME = `query ($page: Int, $from: FuzzyDateInt, $to: FuzzyDateInt) { Page(page: $page, perPage: 50) { pageInfo { hasNextPage }
-  media(type: ANIME, sort: ID, startDate_greater: $from, startDate_lesser: $to) { id idMal meanScore format seasonYear title { english romaji } stats { scoreDistribution { amount } } externalLinks { url } } } }`;
+  media(type: ANIME, sort: ID, startDate_greater: $from, startDate_lesser: $to) { id idMal meanScore format seasonYear title { english romaji } stats { scoreDistribution { score amount } } externalLinks { url } } } }`;
 const matched = new Map<string, Entry[]>();
 let pages = 0;
 // Gli id MAL delle voci abbinate, in attesa del ciclo MAL; `anilistDone` gli dice quando non ne arrivano più.
@@ -114,9 +115,12 @@ async function scanAniList() {
       for (const m of Page.media) {
         const series = m.externalLinks.map((l: { url: string }) => seriesOf(l.url)).find(Boolean);
         if (!series) continue;
-        const votes = m.stats?.scoreDistribution?.reduce((a: number, d: { amount: number }) => a + d.amount, 0) ?? 0;
+        // AniList dà solo le fasce che hanno voti: le dieci si ricostruiscono dal punteggio di ciascuna
+        const dist = Array(10).fill(0);
+        for (const d of (m.stats?.scoreDistribution ?? []) as { score: number; amount: number }[]) if (d.score >= 10 && d.score <= 100) dist[d.score / 10 - 1] += d.amount;
+        const votes = dist.reduce((a, n) => a + n, 0);
         if (!matched.has(series)) matched.set(series, []);
-        matched.get(series)!.push({ id: m.id, idMal: m.idMal, meanScore: m.meanScore, votes, title: m.title?.english ?? m.title?.romaji ?? "", format: m.format ?? null, year: m.seasonYear ?? null });
+        matched.get(series)!.push({ id: m.id, idMal: m.idMal, meanScore: m.meanScore, votes, dist, title: m.title?.english ?? m.title?.romaji ?? "", format: m.format ?? null, year: m.seasonYear ?? null });
         if (m.idMal && !malSeen.has(m.idMal)) malSeen.add(m.idMal), malQueue.push(m.idMal);
       }
       if (Page.pageInfo.hasNextPage) page++;
@@ -201,7 +205,7 @@ for (const [series, entries] of matched) {
   const al = weightedMean(entries.map((e) => ({ score: e.meanScore, votes: e.votes })));
   const m = weightedMean(entries.flatMap((e) => (e.idMal && mal.has(e.idMal) ? [mal.get(e.idMal)!] : [])));
   const detail: ExternalEntry[] = entries.map((e) => ({
-    al: e.id, mal: e.idMal, title: e.title, format: e.format, year: e.year, al_score: e.meanScore, al_votes: e.votes,
+    al: e.id, mal: e.idMal, title: e.title, format: e.format, year: e.year, al_score: e.meanScore, al_votes: e.votes, al_dist: e.dist,
     mal_score: (e.idMal && mal.get(e.idMal)?.score) ?? null, mal_votes: (e.idMal && mal.get(e.idMal)?.votes) || 0,
   }));
   out.series[series] = { ...(al && { al }), ...(m && { mal: m }), entries: detail };
