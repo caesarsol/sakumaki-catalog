@@ -2,7 +2,7 @@ import type { SeriesObject, WatchlistItem } from "./api";
 import { COUNTRIES } from "./countries";
 import { progressBySeries, type Progress } from "./watchlist-progress";
 import type { ExternalRatings } from "./ratings-external";
-import type { Availability } from "./merge";
+import type { Availability, SeasonMatrix } from "./merge";
 const SITE_BASE = Bun.env.SITE_BASE;
 if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
@@ -23,7 +23,7 @@ const PARTIAL_SHARE = 0.1;
 const readNdjson = async <T>(path: string): Promise<T[]> =>
   (await Bun.file(path).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
-type Merged = SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number } };
+type Merged = SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number }; matrix?: SeasonMatrix };
 const catalog = await readNdjson<Merged>(`${dataDir}/catalog.ndjson`);
 const countries = COUNTRIES.filter((c) => catalog.some((s) => s.countries.includes(c.iso2))); // solo i paesi presenti nei dati: un download fallito non lascia una colonna vuota
 let progress: Record<string, Progress> = {};
@@ -156,6 +156,9 @@ const rows = top.map((s) => ({
   mal_raw: external?.series[s.id]?.mal?.score ?? null,
   mal_votes: external?.series[s.id]?.mal?.votes ?? 0,
   mal_n: external?.series[s.id]?.mal?.entries ?? 0,
+  // per il pannello di dettaglio: stagioni per paese e voci AniList/MAL abbinate
+  matrix: s.matrix ?? null,
+  entries: external?.series[s.id]?.entries ?? [],
 }));
 // Le librerie della pagina vengono da node_modules e finiscono dentro la pagina, che resta un file unico:
 // nessun CDN da cui dipendere, versioni fissate in package.json. Un "</script" in una libreria chiuderebbe il tag.

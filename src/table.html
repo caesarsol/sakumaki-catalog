@@ -121,6 +121,39 @@
   .legend { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
   .legend i { width: 10px; height: 10px; border-radius: 1px; display: inline-block; }
 
+  /* Pannello di dettaglio di una serie: si apre dal basso, sopra la tabella. Non dentro la riga: la
+     virtualizzazione conta su righe tutte alte uguali, e sul telefono una matrice dentro una riga non si legge. */
+  #rows tr:not(.pad):not(.sizer) { cursor: pointer; }
+  .sheet-back { position: fixed; inset: 0; background: #0006; z-index: 30; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow: auto; z-index: 31; box-sizing: border-box;
+    background: var(--panel); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px #0003; padding: 14px 16px 28px; font-size: .9rem; }
+  .sheet-back[hidden], .sheet[hidden] { display: none; }
+  .sheet:focus { outline: none; }
+  .sheet h2 { font-size: 1.15rem; margin: 0 32px 2px 0; line-height: 1.25; }
+  .sheet .sub { color: var(--muted); font-size: .8rem; }
+  .sheet .close { position: absolute; top: 8px; right: 10px; font: inherit; font-size: 1.3rem; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 8px; }
+  .sheet h3 { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 6px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.6rem, 1fr)); gap: 6px; }
+  .facts div { background: var(--bg); border-radius: 6px; padding: 4px 7px; }
+  .facts b { display: block; font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+  .facts span { font-size: .7rem; color: var(--muted); }
+  .stars { display: grid; grid-template-columns: 2em 1fr 3.4em 4em; gap: 3px 6px; align-items: center; font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .stars i { display: block; height: 8px; border-radius: 2px; }
+  .stars .n { text-align: right; color: var(--muted); }
+  .matrix-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+  .sheet table.matrix { width: auto; border-collapse: collapse; font-size: .8rem; }
+  .sheet .matrix th, .sheet .matrix td { height: auto; position: static; padding: 3px 5px; cursor: default; background: none; box-shadow: none; border-bottom: 1px solid var(--line); text-align: right; font-weight: normal; }
+  .sheet .matrix th:first-child, .sheet .matrix td:first-child { text-align: left; white-space: normal; min-width: 9rem; max-width: 14rem; }
+  .sheet .matrix th { color: var(--muted); }
+  .sheet .matrix .home { background: var(--accent-weak); } /* la colonna dell'Italia, che decide Stagioni ed Episodi */
+  .sheet .matrix .no { color: var(--line); }
+  .sheet .matrix .less { color: var(--accent); } /* stagione presente ma con meno puntate che altrove */
+  .sheet .matrix tfoot td { font-weight: 600; border-bottom: 0; }
+  .entries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .entries li { background: var(--bg); border-radius: 6px; padding: 5px 8px; }
+  .entries .t { display: block; }
+  .entries .v { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
   /* Tom Select: chip a tre stati (assente → incluso → escluso), il clic sul chip inverte il segno, la ✕ lo toglie. */
   .ts-wrapper { width: 17rem; font-size: .9rem; } /* larghezza fissa: i chip vanno a capo dentro il campo invece di allargare la barra */
   .ts-wrapper.multi .ts-control { min-height: var(--h); padding: 2px 4px; background: var(--panel); border-color: var(--line); border-radius: 6px; }
@@ -236,6 +269,8 @@
   <tbody id="rows"></tbody>
 </table>
 </div>
+<div class="sheet-back" id="sheetBack" hidden></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1" hidden></section>
 <script id="data" type="application/json">__ROWS__</script>
 <script>__VENDOR_JS__</script>
 <script>
@@ -449,7 +484,7 @@
     const key = `${first}-${last}`;
     if (!force && key === painted) return;
     painted = key;
-    $("rows").innerHTML = sizer + pad(first) + items.map((it) => `<tr>${cells.map((f) => f(visible[it.index])).join("")}</tr>`).join("") + pad(visible.length - last - 1);
+    $("rows").innerHTML = sizer + pad(first) + items.map((it) => `<tr data-i="${it.index}">${cells.map((f) => f(visible[it.index])).join("")}</tr>`).join("") + pad(visible.length - last - 1);
   }
   let visible = [];
   let distStar = 0; // la stella per cui si ordina, se si ordina per distribuzione: la sua quota si scrive accanto alla barra
@@ -463,6 +498,47 @@
   virtualizer._didMount();
 
   for (const th of ths) th.onclick = () => { clickSort(keyOf(th)); render(); };
+
+  /* ---- pannello di dettaglio ------------------------------------------------------------- */
+  const n2 = (x, d) => (x == null || x < 0 ? "—" : x.toFixed(d));
+  function sheetHtml(r) {
+    const fact = (label, value) => `<div><b>${value}</b><span>${label}</span></div>`;
+    const facts = [
+      fact("Voto", n2(r.rating, 3)), fact("V Bayes", n2(r.weighted, 3)), fact("V LimConf", n2(r.lcb, 3)), fact("Votanti", fmt.format(r.votes)),
+      fact("V AniList", n2(r.al, 2)), fact("V MAL", n2(r.mal, 2)), fact("Anno", r.year ?? "—"),
+      fact("Episodi in Italia", r.episodes + (r.episodes !== r.episodes_all ? ` / ${r.episodes_all}` : "")),
+      ...(r.in_watchlist ? [fact(r.wl_fav ? "Watchlist ★" : "Watchlist", r.ep_total ? `${r.ep_done}/${r.ep_total}` : episodeLabel(r) || "✓")] : []),
+    ].join("");
+    const stars = [...r.stars.keys()].reverse().map((i) => `<span>${i + 1}★</span><i style="width:${r.stars[i].pct}%;background:var(--s${i + 1})"></i><span class="n">${r.stars[i].pct.toFixed(1)}%</span><span class="n">${r.stars[i].shown}</span>`).join("");
+    let matrix = `<p class="sub">Le stagioni per paese arrivano col prossimo catalogo.</p>`;
+    if (r.matrix) {
+      const cs = countries.filter((c) => r.matrix.by[c.iso2]);
+      const cell = (c, i, max) => { const n = r.matrix.by[c.iso2][i]; return `<td class="${c.iso2 === "IT" ? "home " : ""}${!n ? "no" : n < max ? "less" : ""}">${n || "–"}</td>`; };
+      matrix = `<div class="matrix-wrap"><table class="matrix"><thead><tr><th>Stagione</th>${cs.map((c) => `<th class="${c.iso2 === "IT" ? "home" : ""}" title="${c.iso2}">${flag(c.iso2)}</th>`).join("")}</tr></thead><tbody>` +
+        r.matrix.seasons.map(([t, max], i) => `<tr><td>${esc(t)}</td>${cs.map((c) => cell(c, i, max)).join("")}</tr>`).join("") +
+        `</tbody><tfoot><tr><td>Puntate</td>${cs.map((c) => `<td class="${c.iso2 === "IT" ? "home" : ""}">${r.matrix.by[c.iso2].reduce((a, n) => a + n, 0)}</td>`).join("")}</tr></tfoot></table></div>`;
+    }
+    const entries = r.entries.length
+      ? `<ul class="entries">${r.entries.map((e) => `<li><span class="t">${esc(e.title || "(senza titolo)")}${e.format ? ` · ${e.format}` : ""}${e.year ? ` · ${e.year}` : ""}</span><span class="v"><a href="https://anilist.co/anime/${e.al}" target="_blank">AniList</a> ${e.al_score != null ? `${e.al_score}/100 (${fmt.format(e.al_votes)})` : "—"}${e.mal ? ` · <a href="https://myanimelist.net/anime/${e.mal}" target="_blank">MAL</a> ${e.mal_score != null ? `${e.mal_score}/10 (${fmt.format(e.mal_votes)})` : "—"}` : ""}</span></li>`).join("")}</ul>`
+      : `<p class="sub">${r.al === -2 ? "Le voci di AniList e MAL arrivano col prossimo calcolo dei voti." : "Nessuna voce di AniList abbinata."}</p>`;
+    return `<button class="close" type="button" aria-label="chiudi">✕</button>
+      <h2 id="sheetTitle"><a href="${r.url}" target="_blank">${esc(r.title)}</a></h2>
+      <div class="sub">${esc(r.genres.join(", "))}</div>
+      <h3>In breve</h3><div class="facts">${facts}</div>
+      <h3>Voti sul servizio</h3><div class="stars">${stars}</div>
+      <h3>Stagioni per paese</h3>${matrix}
+      <h3>AniList e MyAnimeList, voce per voce</h3>${entries}`;
+  }
+  const openSheet = (r) => { $("sheet").innerHTML = sheetHtml(r); $("sheet").hidden = $("sheetBack").hidden = false; $("sheet").scrollTop = 0; $("sheet").focus(); }; // il fuoco sul pannello, non sulla ✕: Esc e Tab funzionano senza il bordo del fuoco sul tasto
+  const closeSheet = () => { $("sheet").hidden = $("sheetBack").hidden = true; };
+  $("rows").addEventListener("click", (e) => {
+    if (e.target.closest("a")) return; // il titolo resta il link alla serie
+    const tr = e.target.closest("tr[data-i]");
+    if (tr) openSheet(visible[Number(tr.dataset.i)]);
+  });
+  $("sheetBack").onclick = closeSheet;
+  $("sheet").addEventListener("click", (e) => { if (e.target.closest(".close")) closeSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
   const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")], Voti: [$("tabVoti"), $("paneVoti")] };
   for (const [nome, [tab]] of Object.entries(schede)) tab.onclick = () => {
     for (const [altro, [t, pannello]] of Object.entries(schede)) {
