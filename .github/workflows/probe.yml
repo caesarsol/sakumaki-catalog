@@ -7,33 +7,18 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 30
     env:
-      GH_TOKEN: ${{ github.token }}
-      R: ${{ github.repository }}
+      NORD_USER: ${{ secrets.NORD_USER }}
+      NORD_PASS: ${{ secrets.NORD_PASS }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
       - run: |
-          gh workflow run catalog.yml --ref main -R "$R"
-          sleep 20
-          id=$(gh run list -R "$R" --workflow catalog.yml --limit 1 --json databaseId --jq '.[0].databaseId')
-          echo "catalog run $id"
-          gh run watch "$id" -R "$R" --interval 60 > /dev/null || true
-          gh run view "$id" -R "$R" --json conclusion --jq .conclusion
-          gh run download "$id" -R "$R" --name catalog --dir data
+          bun install --frozen-lockfile
       - run: |
-          cd data
-          echo "file dell'artifact, grezzi:"; ls -l | awk 'NR>1 {printf "  %-28s %7.1f MB\n", $9, $5/1e6}'
-          du -cb catalog-??.ndjson | tail -1 | awk '{printf "elenchi per paese: %.1f MB grezzi\n", $1/1e6}'
-          du -cb catalog-seasons-*.ndjson | tail -1 | awk '{printf "stagioni per paese: %.1f MB grezzi\n", $1/1e6}'
-          cat catalog-??.ndjson | xz -9 -T0 | wc -c | awk '{printf "elenchi, tutti i paesi insieme, xz -9: %.2f MB\n", $1/1e6}'
-          cat catalog-seasons-*.ndjson | xz -9 -T0 | wc -c | awk '{printf "stagioni, tutti i paesi insieme, xz -9: %.2f MB\n", $1/1e6}'
-          tar -cf - catalog-??.ndjson catalog-seasons-*.ndjson | xz -9 -T0 | wc -c | awk '{printf "settimana intera in un tar.xz: %.2f MB\n", $1/1e6}'
-          tar -cf - catalog-??.ndjson catalog-seasons-*.ndjson | gzip -9 | wc -c | awk '{printf "settimana intera in un tar.gz: %.2f MB\n", $1/1e6}'
-      - run: |
-          jq -r 'select(.availability) | .union.episodes as $u | .availability | to_entries[] | select($u > 0 and ($u - .value.episodes) > 0.1 * $u) | .key' data/catalog.ndjson | sort | uniq -c | awk '{print "  serie a cui manca più del 10% in " $2 ": " $1}'
-          jq -s -r '[.[] | select(.availability)] | length as $n | "serie con le stagioni per paese: \($n)"' data/catalog.ndjson
+          bun run src/probe.ts
