@@ -2,34 +2,36 @@ import { cms, loginAnonymous, setDefaultProxy } from "./api";
 import { COUNTRIES } from "./countries";
 import { randomProxy } from "./nordvpn";
 
-// Sonda: stagioni e puntate di una serie viste da paesi diversi, con lo stato di disponibilità delle puntate.
-// Stampa solo dati pubblici del catalogo (titoli, conteggi, stati), mai host o token.
-const seriesId = Bun.argv[2] ?? "GYQ4MKDZ6";
-type Season = { id: string; season_number: number; season_sequence_number: number; number_of_episodes: number; title: string; availability_notes?: string };
-type Episode = { id: string; episode: string; availability_status?: string; is_premium_only?: boolean; eligible_region?: string; availability_starts?: string; availability_ends?: string };
+// Sonda: per le prime 100 serie per V Bayes disponibili in Italia, quante stagioni e puntate restituisce
+// l'API dall'Italia rispetto ai conteggi del catalogo. Stampa solo dati pubblici, mai host o token.
+type Row = { id: string; title: string; countries: string[]; rating_weighted: number; series_metadata: { season_count: number; episode_count: number } };
+type Season = { id: string; season_sequence_number: number; number_of_episodes: number; title: string };
 
-for (const iso2 of ["IT", "US"]) {
-  const c = COUNTRIES.find((x) => x.iso2 === iso2)!;
+const scored: Row[] = (await Bun.file("data/catalog-scored.ndjson").text()).trim().split("\n").map((l) => JSON.parse(l));
+const top = scored.filter((s) => s.countries.includes("IT")).slice(0, 100);
+const it = COUNTRIES.find((c) => c.iso2 === "IT")!;
+const proxy = (await randomProxy(it.nordId)).url;
+const token = await loginAnonymous(proxy);
+setDefaultProxy(proxy);
+console.log(`l'API ci vede in ${token.country}; ${top.length} serie, dalla ${top[0].title} (${top[0].rating_weighted}) alla ${top.at(-1)!.title} (${top.at(-1)!.rating_weighted})`);
+
+let full = 0, partial = 0, failed = 0;
+const lines: string[] = [];
+for (const [i, s] of top.entries()) {
   try {
-    const proxy = (await randomProxy(c.nordId)).url;
-    const token = await loginAnonymous(proxy);
-    setDefaultProxy(proxy);
-    console.log(`\n=== ${iso2}: l'API ci vede in ${token.country}`);
-    const seasons = (await cms<Season>(token, `series/${seriesId}/seasons`)).sort((a, b) => a.season_sequence_number - b.season_sequence_number);
-    let listed = 0, available = 0;
-    for (const s of seasons) {
-      const eps = await cms<Episode>(token, `seasons/${s.id}/episodes`);
-      const byStatus: Record<string, number> = {};
-      for (const e of eps) byStatus[e.availability_status ?? "?"] = (byStatus[e.availability_status ?? "?"] ?? 0) + 1;
-      listed += eps.length;
-      available += byStatus["available"] ?? 0;
-      const ends = eps.map((e) => e.availability_ends).filter(Boolean).sort()[0];
-      console.log(`  seq ${String(s.season_sequence_number).padStart(2)} "${s.title}": dichiarate ${s.number_of_episodes}, elencate ${eps.length}, stati ${JSON.stringify(byStatus)}${ends ? `, fine disponibilità più vicina ${ends.slice(0, 10)}` : ""}${s.availability_notes ? `, note: ${s.availability_notes}` : ""}`);
-      await Bun.sleep(300);
+    const seasons = await cms<Season>(token, `series/${s.id}/seasons`);
+    const eps = seasons.reduce((a, x) => a + x.number_of_episodes, 0);
+    const m = s.series_metadata;
+    if (eps >= m.episode_count) full++;
+    else {
+      partial++;
+      lines.push(`  #${String(i + 1).padStart(3)} ${s.title}: in Italia ${seasons.length}/${m.season_count} stagioni, ${eps}/${m.episode_count} puntate — ci sono: ${seasons.sort((a, b) => a.season_sequence_number - b.season_sequence_number).map((x) => `"${x.title}" (${x.number_of_episodes})`).join(", ")}`);
     }
-    console.log(`  totale: ${seasons.length} stagioni, ${listed} puntate elencate, ${available} disponibili`);
   } catch (e) {
-    console.log(`=== ${iso2}: ${(e as Error).message}`);
+    failed++;
+    lines.push(`  #${i + 1} ${s.title}: ${(e as Error).message}`);
   }
-  setDefaultProxy(undefined);
+  await Bun.sleep(300);
 }
+console.log(`complete in Italia: ${full}; parziali: ${partial}; non lette: ${failed}`);
+for (const l of lines) console.log(l);

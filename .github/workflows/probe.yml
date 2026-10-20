@@ -24,4 +24,7 @@ jobs:
       - run: |
           bun install --frozen-lockfile
       - run: |
-          bun run src/probe.ts GYQ4MKDZ6
+          gh run download "$(gh run list -R "$R" --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" -R "$R" --name catalog --dir data
+          SITE_BASE=https://example.invalid bun run table > /dev/null
+      - run: |
+          bun run src/probe.ts
