@@ -10,15 +10,27 @@ permissions:
   actions: write
 
 jobs:
-  probe:
+  mal:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 30
     env:
-      GH_TOKEN: ${{ github.token }}
-      R: ${{ github.repository }}
+      MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
       - run: |
-          gh run watch 39476853377 -R "$R" --interval 60 > /dev/null || true
-          echo "voti: $(gh run view 39476853377 -R "$R" --json conclusion --jq .conclusion)"
-          gh workflow run catalog.yml --ref main -R "$R"
-          echo "catalogo lanciato"
+          bun install --frozen-lockfile
+          bun run src/probe.ts
+  dates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      NORD_USER: ${{ secrets.NORD_USER }}
+      NORD_PASS: ${{ secrets.NORD_PASS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: |
+          bun install --frozen-lockfile
+          bun run src/probe-dates.ts
