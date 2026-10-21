@@ -23,9 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: | # ieri (ultime puntate e voti già letti) e il catalogo, per cercare i voti anche fuori dalla watchlist
+      - run: | # ieri: ultime puntate e voti già letti
           gh run download "$(gh run list --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name watchlist --dir data || true
-          gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data || true
         env:
           GH_TOKEN: ${{ github.token }}
       - run: bun run watchlist

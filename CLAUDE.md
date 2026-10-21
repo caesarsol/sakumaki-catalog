@@ -136,7 +136,8 @@ questo. I segnalibri sono il dato della scheda serie e tornano tutti in una chia
   puntata: le serie col `last_public` invariato non si rileggono. Il catalogo la legge ogni sabato per tutte le
   serie, la watchlist ogni giorno per le sue; la pagina prende la più recente.
 - Il voto in stelline dell'account: `/content-reviews/v2/user/<account>/rating/series/<id>`, campo `rating`
-  ("5s"… o vuoto). Ogni giorno per le serie in watchlist e quelle già votate, il sabato per tutto il catalogo.
+  ("5s"… o vuoto). Un voto si cambia di rado: quelli già noti si tengono senza rileggerli, e ogni giorno si
+  chiedono solo quelli delle serie in watchlist ancora senza voto.
 - Nella pagina watchlist e voto sono simboli in fondo al titolo (segnalibro, pieno se preferita; stelline),
   e restano criteri di ordinamento nel pannello.
 
