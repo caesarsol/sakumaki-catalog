@@ -37,19 +37,23 @@ function pacer(ms: number) {
   };
 }
 /** fetch che riprova gli errori di rete (connessione chiusa, timeout): uno solo non deve far fallire il run. */
-async function fetchRetry(url: string, init: RequestInit, onRetry: (kind: string) => void, timeoutMs = 30_000, onTime?: (ms: number) => void): Promise<Response> {
+async function fetchRetry(
+  url: string,
+  init: RequestInit,
+  opts: { onRetry: (kind: string) => void; timeoutMs?: number; pauseMs?: number; onTime?: (ms: number) => void },
+): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     try {
       const t0 = Date.now();
-      const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
-      onTime?.(Date.now() - t0); // fino alle intestazioni: il corpo di MAL è qualche centinaio di byte
+      const res = await fetch(url, { ...init, signal: AbortSignal.timeout(opts.timeoutMs ?? 30_000) });
+      opts.onTime?.(Date.now() - t0); // fino alle intestazioni: il corpo di MAL è qualche centinaio di byte
       return res;
     } catch (e) {
       if (attempt === 5) throw e;
       // "ECONNRESET"…; il timeout è una DOMException con `code` numerico (23), che nel log non diceva niente
       const { code, name } = e as { code?: unknown; name?: string };
-      onRetry(typeof code === "string" ? code : (name ?? "?"));
-      await Bun.sleep(10_000 * attempt);
+      opts.onRetry(typeof code === "string" ? code : (name ?? "?"));
+      await Bun.sleep((opts.pauseMs ?? 10_000) * attempt);
     }
   }
 }
@@ -86,7 +90,7 @@ async function post(query: string, variables: object): Promise<any> {
     const res = await fetchRetry(
       "https://graphql.anilist.co",
       { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ query, variables }) },
-      () => anilistRetries++,
+      { onRetry: () => anilistRetries++ },
     );
     if (res.status === 429) {
       await Bun.sleep(Number(res.headers.get("retry-after") ?? 60) * 1000 + 1000);
@@ -149,21 +153,39 @@ function weightedMean(parts: { score: number | null; votes: number }[]): Externa
 }
 
 const malRefused: Record<string, number> = {}; // risposte 429, 403 e 5xx per codice, ed errori di rete per tipo
-// Una risposta di MAL arriva in 0,7 s: oltre 10 s la connessione è persa, e aspettarne 30 bloccava un ciclo.
-const MAL_TIMEOUT_MS = 10_000;
+/*
+ * La sonda del 21 ottobre 2026 (800 chiamate, timeout a 60 s): le risposte arrivano in 82 ms di mediana, 0,6 s
+ * al massimo. I "timeout" sono un'altra cosa: dopo circa 88 chiamate in 44 s MAL smette di rispondere a tutte,
+ * per meno di un minuto, senza un 429. Quindi 2 s bastano a riconoscere una chiamata ignorata, e i ritentativi
+ * aspettano 5, 10, 15, 20 s: in tutto un minuto, più di quanto dura il blocco. Il log dice quanto dura davvero.
+ */
+const MAL_TIMEOUT_MS = 2_000;
+const MAL_RETRY_PAUSE_MS = 5_000;
 const refused = (k: string | number) => (malRefused[k] = (malRefused[k] ?? 0) + 1);
-// Tempi delle risposte arrivate, per scegliere il timeout: se quasi tutte arrivano in 1 s, aspettarne 10 è spreco.
+// Tempi delle risposte arrivate, e durata dei blocchi: dal primo timeout alla prima risposta dopo.
 const malTimes: number[] = [];
+const malStalls: number[] = [];
+let stallStart = 0;
+const malRetry = (k: string) => {
+  refused(k);
+  if (!stallStart) stallStart = Date.now();
+};
+const malTime = (ms: number) => {
+  malTimes.push(ms);
+  if (stallStart) malStalls.push(Date.now() - stallStart), (stallStart = 0);
+};
 const timing = () => {
   const xs = [...malTimes].sort((a, b) => a - b);
   const q = (p: number) => xs[Math.min(xs.length - 1, Math.floor(p * xs.length))];
-  return xs.length ? `risposte in p50 ${q(0.5)} ms, p90 ${q(0.9)}, p99 ${q(0.99)}, max ${xs.at(-1)} (timeout a ${MAL_TIMEOUT_MS} ms)` : "nessuna risposta";
+  const st = [...malStalls].sort((a, b) => a - b);
+  const stalls = st.length ? `${st.length} blocchi da ${Math.round(st[0]! / 1000)}–${Math.round(st.at(-1)! / 1000)} s (mediana ${Math.round(st[st.length >> 1]! / 1000)} s)` : "nessun blocco";
+  return xs.length ? `risposte in p50 ${q(0.5)} ms, p90 ${q(0.9)}, p99 ${q(0.99)}, max ${xs.at(-1)} (timeout a ${MAL_TIMEOUT_MS} ms), ${stalls}` : "nessuna risposta";
 };
 async function malScore(id: number): Promise<{ score: number | null; votes: number } | null> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const res = MAL_CLIENT_ID
-      ? await fetchRetry(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID } }, (k) => refused(k), MAL_TIMEOUT_MS, (ms) => malTimes.push(ms))
-      : await fetchRetry(`https://api.jikan.moe/v4/anime/${id}`, {}, (k) => refused(k), MAL_TIMEOUT_MS, (ms) => malTimes.push(ms));
+      ? await fetchRetry(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID } }, { onRetry: malRetry, timeoutMs: MAL_TIMEOUT_MS, pauseMs: MAL_RETRY_PAUSE_MS, onTime: malTime })
+      : await fetchRetry(`https://api.jikan.moe/v4/anime/${id}`, {}, { onRetry: malRetry, timeoutMs: 10_000, onTime: malTime });
     if (res.status === 404) return null;
     if (res.status === 429 || res.status === 403 || res.status >= 500) {
       refused(res.status);
