@@ -37,10 +37,13 @@ function pacer(ms: number) {
   };
 }
 /** fetch che riprova gli errori di rete (connessione chiusa, timeout): uno solo non deve far fallire il run. */
-async function fetchRetry(url: string, init: RequestInit, onRetry: (kind: string) => void, timeoutMs = 30_000): Promise<Response> {
+async function fetchRetry(url: string, init: RequestInit, onRetry: (kind: string) => void, timeoutMs = 30_000, onTime?: (ms: number) => void): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      const t0 = Date.now();
+      const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      onTime?.(Date.now() - t0); // fino alle intestazioni: il corpo di MAL è qualche centinaio di byte
+      return res;
     } catch (e) {
       if (attempt === 5) throw e;
       // "ECONNRESET"…; il timeout è una DOMException con `code` numerico (23), che nel log non diceva niente
@@ -149,11 +152,18 @@ const malRefused: Record<string, number> = {}; // risposte 429, 403 e 5xx per co
 // Una risposta di MAL arriva in 0,7 s: oltre 10 s la connessione è persa, e aspettarne 30 bloccava un ciclo.
 const MAL_TIMEOUT_MS = 10_000;
 const refused = (k: string | number) => (malRefused[k] = (malRefused[k] ?? 0) + 1);
+// Tempi delle risposte arrivate, per scegliere il timeout: se quasi tutte arrivano in 1 s, aspettarne 10 è spreco.
+const malTimes: number[] = [];
+const timing = () => {
+  const xs = [...malTimes].sort((a, b) => a - b);
+  const q = (p: number) => xs[Math.min(xs.length - 1, Math.floor(p * xs.length))];
+  return xs.length ? `risposte in p50 ${q(0.5)} ms, p90 ${q(0.9)}, p99 ${q(0.99)}, max ${xs.at(-1)} (timeout a ${MAL_TIMEOUT_MS} ms)` : "nessuna risposta";
+};
 async function malScore(id: number): Promise<{ score: number | null; votes: number } | null> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const res = MAL_CLIENT_ID
-      ? await fetchRetry(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID } }, (k) => refused(k), MAL_TIMEOUT_MS)
-      : await fetchRetry(`https://api.jikan.moe/v4/anime/${id}`, {}, (k) => refused(k), MAL_TIMEOUT_MS);
+      ? await fetchRetry(`https://api.myanimelist.net/v2/anime/${id}?fields=mean,num_scoring_users`, { headers: { "X-MAL-CLIENT-ID": MAL_CLIENT_ID } }, (k) => refused(k), MAL_TIMEOUT_MS, (ms) => malTimes.push(ms))
+      : await fetchRetry(`https://api.jikan.moe/v4/anime/${id}`, {}, (k) => refused(k), MAL_TIMEOUT_MS, (ms) => malTimes.push(ms));
     if (res.status === 404) return null;
     if (res.status === 429 || res.status === 403 || res.status >= 500) {
       refused(res.status);
@@ -195,7 +205,7 @@ async function scanMal() {
     else malFailed++;
     malDone++;
     if (malDone >= 5 && mal.size === 0) malGaveUp = true; // cinque fallimenti su cinque: la fonte non risponde, inutile insistere
-    if (malDone % 250 === 0) console.log(`MAL: ${malDone} letti su ${malSeen.size} trovati finora (${malQueue.length} in attesa) in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}`);
+    if (malDone % 250 === 0) console.log(`MAL: ${malDone} letti su ${malSeen.size} trovati finora (${malQueue.length} in attesa) in ${Math.round((Date.now() - malStart) / 60000)} min, rifiuti ${JSON.stringify(malRefused)}, ${timing()}`);
   }
 }
 
@@ -217,5 +227,5 @@ const count = (k: "al" | "mal") => Object.values(out.series).filter((r) => r[k])
 console.log(
   `AniList: ${pages} pagine (${anilistRetries} errori di rete ritentati), ${matched.size} serie su ${catalog.length} abbinate, ${count("al")} con voto. ` +
     `MAL (${MAL_CLIENT_ID ? "API ufficiale" : "Jikan"}): ` +
-    (malAvailable ? `${malDone} voci in ${Math.round((Date.now() - malStart) / 60000)} min, ${malFailed} non lette, rifiuti ${JSON.stringify(malRefused)}, ${count("mal")} serie con voto.` : `non raggiungibile (${malError || "nessun voto"}), colonna vuota.`),
+    (malAvailable ? `${malDone} voci in ${Math.round((Date.now() - malStart) / 60000)} min, ${malFailed} non lette, rifiuti ${JSON.stringify(malRefused)}, ${timing()}, ${count("mal")} serie con voto.` : `non raggiungibile (${malError || "nessun voto"}), colonna vuota.`),
 );
