@@ -1,6 +1,7 @@
 import { fetchCatalog, loginAnonymous, type SeriesObject } from "./api";
 import { seasonsByCountry, type Season } from "./catalog-seasons";
 import { COUNTRIES, type Country } from "./countries";
+import { latestEpisodes, type Latest } from "./latest-episode";
 import { randomProxy } from "./nordvpn";
 
 /**
@@ -20,6 +21,15 @@ const LOGIN_GAP_S = [Number(Bun.env.LOGIN_GAP_MIN_S ?? 20), Number(Bun.env.LOGIN
 // Prima di ritentare un paese fallito: lunga, per uscire da un eventuale blocco 407 dei proxy.
 const RETRY_PAUSE_MS = Number(Bun.env.COUNTRY_PAUSE_S || 300) * 1000;
 
+const HOME = "IT";
+const latestFile = `${dataDir}/catalog-latest-${HOME}.ndjson`;
+/** Le date della settimana scorsa, dall'artifact precedente: le serie col last_public invariato non si rileggono. */
+async function previousLatest(): Promise<Record<string, Latest>> {
+  if (!(await Bun.file(latestFile).exists())) return {};
+  const rows = (await Bun.file(latestFile).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l) as Latest & { id: string });
+  return Object.fromEntries(rows.map(({ id, ...l }) => [id, l]));
+}
+
 let nextLogin = 0;
 /** Il turno per il prossimo login, condiviso da tutti i paesi in corso. */
 async function loginTurn() {
@@ -30,7 +40,7 @@ async function loginTurn() {
 }
 
 /** Due server diversi, con la pausa lunga in mezzo: Nord può non rispondere, un proxy rifiutare, o l'API vederci in un paese diverso da quello atteso. */
-async function catalogFrom(country: Country): Promise<{ series: SeriesObject[]; seasons: Map<string, Season[]> }> {
+async function catalogFrom(country: Country): Promise<{ series: SeriesObject[]; seasons: Map<string, Season[]>; latest?: Record<string, Latest> }> {
   for (let attempt = 1; ; attempt++) {
     let host = "?";
     try {
@@ -42,7 +52,9 @@ async function catalogFrom(country: Country): Promise<{ series: SeriesObject[]; 
       const series = await fetchCatalog(token, "en-US", proxy.url);
       console.log(`${country.iso2}: ${series.length} serie`);
       const seasons = await seasonsByCountry(token, series.map((s) => s.id), proxy.url, country.iso2);
-      return { series, seasons };
+      // L'ultima puntata solo da casa, con le stagioni appena lette: le date sono quelle del servizio, uguali ovunque.
+      const latest = country.iso2 === HOME ? await latestEpisodes(async () => token, series, await previousLatest(), { proxy: proxy.url, seasons, label: HOME }) : undefined;
+      return { series, seasons, latest };
     } catch (e) {
       console.warn(`${country.iso2} via ${host}, tentativo ${attempt}: ${(e as Error).message}`);
       if (attempt === 2) throw e;
@@ -62,9 +74,10 @@ const queue = [...(only.length ? COUNTRIES.filter((c) => only.includes(c.iso2)) 
 const failed: string[] = [];
 const t0 = Date.now();
 async function run(country: Country) {
-  const { series, seasons } = await catalogFrom(country);
+  const { series, seasons, latest } = await catalogFrom(country);
   await Bun.write(`${dataDir}/catalog-${country.iso2}.ndjson`, ndjson(series));
   await Bun.write(`${dataDir}/catalog-seasons-${country.iso2}.ndjson`, ndjson([...seasons].map(([id, data]) => ({ id, seasons: data }))));
+  if (latest) await Bun.write(latestFile, ndjson(Object.entries(latest).map(([id, l]) => ({ id, ...l }))));
 }
 async function worker() {
   for (let country = queue.shift(); country; country = queue.shift()) await run(country).catch(() => failed.push(country.iso2));
