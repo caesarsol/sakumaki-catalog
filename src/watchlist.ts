@@ -1,5 +1,6 @@
-import { fetchBookmarks, fetchWatchlist, login, setDefaultProxy, type Token } from "./api";
+import { fetchBookmarks, fetchMyRating, fetchObjects, fetchWatchlist, login, setDefaultProxy, type Token } from "./api";
 import { COUNTRIES } from "./countries";
+import { latestEpisodes, type Latest } from "./latest-episode";
 import { randomProxy } from "./nordvpn";
 import { episodePositions } from "./watchlist-position";
 
@@ -52,3 +53,44 @@ const positions = await episodePositions(
 const out = `${import.meta.dir}/../data/watchlist.json`;
 await Bun.write(out, JSON.stringify({ fetched_at: new Date().toISOString(), total: data.length, data, bookmarks, positions }, null, 2));
 console.log(`${data.length} titoli e ${bookmarks.length} segnalibri salvati in ${out}`);
+
+/*
+ * Ogni giorno, oltre all'avanzamento: l'ultima puntata delle serie in watchlist (il catalogo la legge solo il
+ * sabato) e i tuoi voti in stelline. Finiscono in data/watchlist-extra.json, che esce dal runner con
+ * l'avanzamento: sono gli stessi dati che la pagina mostra. Quello di ieri arriva dall'artifact precedente.
+ */
+const dataDir = `${import.meta.dir}/../data`;
+type Extra = { fetched_at: string; latest: Record<string, Latest>; my_rating: Record<string, number> };
+const extraFile = Bun.file(`${dataDir}/watchlist-extra.json`);
+const previous: Extra | null = (await extraFile.exists()) ? await extraFile.json() : null;
+
+const ids = bookmarks.map((b) => b.id);
+const objects = [];
+for (let i = 0; i < ids.length; i += 50) objects.push(...(await fetchObjects(await current(), ids.slice(i, i + 50))));
+const latest = await latestEpisodes(current, objects, previous?.latest ?? {}, { label: "watchlist" });
+
+// I voti: le serie in watchlist e quelle votate l'ultima volta; il sabato, o al primo run, tutto il catalogo,
+// per trovare anche le serie votate e tolte dalla watchlist.
+const catalogFile = Bun.file(`${dataDir}/catalog.ndjson`);
+const full = !previous || new Date().getUTCDay() === 6;
+const catalogIds = full && (await catalogFile.exists()) ? (await catalogFile.text()).trim().split("\n").map((l) => (JSON.parse(l) as { id: string }).id) : [];
+const toRate = [...new Set([...ids, ...Object.keys(previous?.my_rating ?? {}), ...catalogIds])];
+const myRating: Record<string, number> = {};
+const ratingErrors: Record<string, number> = {};
+const t0 = Date.now();
+for (const id of toRate) {
+  try {
+    const r = await fetchMyRating(await current(), id);
+    if (r) myRating[id] = r;
+  } catch (e) {
+    const k = String((e as { status?: number }).status ?? (e as Error).name);
+    ratingErrors[k] = (ratingErrors[k] ?? 0) + 1;
+    if (previous?.my_rating[id]) myRating[id] = previous.my_rating[id]!; // meglio il voto di ieri che nessuno
+  }
+  await Bun.sleep(150);
+}
+console.log(
+  `voti personali: ${toRate.length} serie lette${full ? " (catalogo intero)" : ""} in ${Math.round((Date.now() - t0) / 1000)} s, ` +
+    `${Object.keys(myRating).length} votate, errori ${JSON.stringify(ratingErrors)}`,
+);
+await Bun.write(extraFile, JSON.stringify({ fetched_at: new Date().toISOString(), latest, my_rating: myRating } satisfies Extra));

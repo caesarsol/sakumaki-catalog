@@ -23,13 +23,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - run: | # ieri (ultime puntate e voti già letti) e il catalogo, per cercare i voti anche fuori dalla watchlist
+          gh run download "$(gh run list --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name watchlist --dir data || true
+          gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data || true
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: bun run watchlist
       - run: bun run watchlist-progress
       - run: bun run watchlist-votes
       - uses: actions/upload-artifact@v4
         with:
           name: watchlist
-          path: data/watchlist-progress.json # solo l'avanzamento che la pagina mostra: gli artifact di un repo pubblico sono pubblici, e watchlist.json contiene anche id e titoli delle puntate
+          # solo quel che la pagina mostra (avanzamento, ultime puntate, voti): gli artifact di un repo pubblico sono pubblici, e watchlist.json contiene anche id e titoli delle puntate
+          path: |
+            data/watchlist-progress.json
+            data/watchlist-extra.json
           retention-days: 30
       - run: gh workflow run deploy.yml # ripubblica la pagina con la watchlist di stamattina
         env:

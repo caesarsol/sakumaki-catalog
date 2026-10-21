@@ -166,6 +166,18 @@ export async function fetchPlayheads(token: Token, ids: string[], locale = "en-U
   return ((await res.json()) as { data: { content_id: string; playhead: number; fully_watched: boolean }[] }).data ?? [];
 }
 
+/** Il voto in stelline che l'account ha dato alla serie, da 1 a 5; 0 se non l'ha votata. */
+export async function fetchMyRating(token: Token, seriesId: string): Promise<number> {
+  const res = await fetch(`${BASE}/content-reviews/v2/user/${token.account_id}/rating/series/${seriesId}`, {
+    proxy: defaultProxy,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": UA },
+  });
+  if (!res.ok) throw Object.assign(new Error(`rating failed: ${res.status}`), { status: res.status });
+  const { rating } = (await res.json()) as { rating?: string }; // "5s", "4s"…, "" se non votata
+  return Number(rating?.[0]) || 0;
+}
+
 type StarBucket = { displayed: string; unit: string; percentage: number };
 export type Rating = Record<"1s" | "2s" | "3s" | "4s" | "5s", StarBucket> & {
   average: string;
