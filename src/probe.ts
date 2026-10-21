@@ -5,23 +5,9 @@
 const MAL_CLIENT_ID = Bun.env.MAL_CLIENT_ID;
 if (!MAL_CLIENT_ID) throw new Error("MAL_CLIENT_ID mancante");
 
-const ids: number[] = [];
-for (let page = 1; page <= 16; page++) {
-  const res = await fetch("https://graphql.anilist.co", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ query: `{ Page(page: ${page}, perPage: 50) { media(type: ANIME, sort: POPULARITY_DESC) { idMal } } }` }),
-  });
-  if (res.status === 429) {
-    await Bun.sleep(65_000);
-    page--;
-    continue;
-  }
-  const b: any = await res.json();
-  if (!b.data) throw new Error(`AniList: HTTP ${res.status} ${JSON.stringify(b.errors ?? b).slice(0, 200)}`);
-  for (const m of b.data.Page.media) if (m.idMal) ids.push(m.idMal);
-  await Bun.sleep(2100);
-}
+// Gli id MAL dall'ultimo artifact dei voti: il 21 ottobre 2026 l'API di AniList era sospesa ("temporarily disabled").
+const ratings: any = await Bun.file("data/ratings-external.json").json();
+const ids = [...new Set(Object.values(ratings.series).flatMap((r: any) => (r.entries ?? []).map((e: any) => e.mal)).filter(Boolean))].slice(0, 800) as number[];
 console.log(`${ids.length} id MAL da AniList`);
 
 const q = (xs: number[], p: number) => xs[Math.min(xs.length - 1, Math.floor(p * xs.length))]!;

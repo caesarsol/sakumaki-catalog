@@ -15,9 +15,11 @@ jobs:
     timeout-minutes: 30
     env:
       MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: |
           bun install --frozen-lockfile
+          gh run download "$(gh run list --workflow ratings.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name ratings --dir data
           bun run src/probe.ts
