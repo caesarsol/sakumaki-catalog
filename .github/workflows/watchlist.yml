@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "0 2 * * 0-5" # 04:00 Europe/Rome in estate, 03:00 in inverno; non il sabato, che è il giorno di catalog.yml e ci pensa lui a lanciare questo a fine run
   workflow_dispatch:
+    inputs:
+      full_ratings:
+        description: rilegge i voti personali di tutto il catalogo (lo chiede catalog.yml una volta a settimana)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -19,12 +24,16 @@ jobs:
       API_BASE: ${{ secrets.API_BASE }} # gli host sono secret, non variabili: nei log pubblici vengono mascherati
       NORD_USER: ${{ secrets.NORD_USER }} # proxy NordVPN italiano: dal runner l'API vedrebbe gli USA e perderebbe le serie non disponibili là
       NORD_PASS: ${{ secrets.NORD_PASS }}
+      FULL_RATINGS: ${{ inputs.full_ratings }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: | # ieri: ultime puntate e voti già letti
+      - run: | # ieri: ultime puntate e voti già letti; nel giro settimanale dei voti anche il catalogo
           gh run download "$(gh run list --workflow watchlist.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name watchlist --dir data || true
+          if [ "$FULL_RATINGS" = "true" ]; then
+            gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data || true
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
       - run: bun run watchlist

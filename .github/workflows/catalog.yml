@@ -34,7 +34,7 @@ jobs:
           retention-days: 90
       - run: bun run src/history.ts data/catalog-??.ndjson data/catalog-seasons-*.ndjson # storico nel ramo history: git salva solo cosa cambia, e non scade
         continue-on-error: true # lo storico non deve fermare watchlist e voti
-      - run: gh workflow run watchlist.yml # ricostruisce la pagina con il catalogo nuovo
+      - run: gh workflow run watchlist.yml -f full_ratings=true # ricostruisce la pagina con il catalogo nuovo, e una volta a settimana rilegge tutti i voti personali
         env:
           GH_TOKEN: ${{ github.token }}
       - run: gh workflow run ratings.yml # voti AniList e MAL per le serie del catalogo nuovo

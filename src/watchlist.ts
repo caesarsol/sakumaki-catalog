@@ -69,10 +69,16 @@ const objects = [];
 for (let i = 0; i < ids.length; i += 50) objects.push(...(await fetchObjects(await current(), ids.slice(i, i + 50))));
 const latest = await latestEpisodes(current, objects, previous?.latest ?? {}, { label: "watchlist" });
 
-// I voti: un voto dato si cambia di rado, quindi quelli già noti si tengono senza rileggerli (anche delle serie
-// uscite dalla watchlist), e ogni giorno si chiedono solo quelli delle serie in watchlist ancora senza voto.
-const myRating: Record<string, number> = { ...previous?.my_rating };
-const toRate = ids.filter((id) => !myRating[id]);
+// I voti: un voto dato si cambia di rado, quindi gli altri giorni quelli già noti si tengono senza rileggerli
+// (anche delle serie uscite dalla watchlist) e si chiedono solo quelli delle serie in watchlist ancora senza voto.
+// Il run lanciato dal catalogo, una volta a settimana (FULL_RATINGS), rilegge tutto il catalogo e riparte da zero:
+// così un voto cambiato o tolto si corregge, e si trovano i voti dati a serie che in watchlist non ci sono.
+const full = Bun.env.FULL_RATINGS === "true";
+const catalogFile = Bun.file(`${dataDir}/catalog.ndjson`);
+const catalogIds = full && (await catalogFile.exists()) ? (await catalogFile.text()).trim().split("\n").map((l) => (JSON.parse(l) as { id: string }).id) : [];
+if (full && !catalogIds.length) console.warn("voti personali: giro completo chiesto ma catalog.ndjson manca, letta solo la watchlist");
+const myRating: Record<string, number> = full ? {} : { ...previous?.my_rating };
+const toRate = full ? [...new Set([...ids, ...catalogIds])] : ids.filter((id) => !myRating[id]);
 const ratingErrors: Record<string, number> = {};
 const t0 = Date.now();
 for (const id of toRate) {
@@ -82,11 +88,12 @@ for (const id of toRate) {
   } catch (e) {
     const k = String((e as { status?: number }).status ?? (e as Error).name);
     ratingErrors[k] = (ratingErrors[k] ?? 0) + 1;
+    if (full && previous?.my_rating[id]) myRating[id] = previous.my_rating[id]!; // nel giro completo, meglio il voto di prima che nessuno
   }
   await Bun.sleep(150);
 }
 console.log(
-  `voti personali: ${Object.keys(previous?.my_rating ?? {}).length} già noti, ${toRate.length} serie in watchlist senza voto lette in ` +
+  `voti personali: ${full ? `giro completo, ${toRate.length} serie lette` : `${Object.keys(previous?.my_rating ?? {}).length} già noti, ${toRate.length} serie in watchlist senza voto lette`} in ` +
     `${Math.round((Date.now() - t0) / 1000)} s, ${Object.keys(myRating).length} votate in tutto, errori ${JSON.stringify(ratingErrors)}`,
 );
 await Bun.write(extraFile, JSON.stringify({ fetched_at: new Date().toISOString(), latest, my_rating: myRating } satisfies Extra));

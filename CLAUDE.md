@@ -74,7 +74,7 @@ non valido e il run fallisce senza job.
 | workflow | quando | cosa fa |
 |---|---|---|
 | `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN, 5 paesi alla volta con i login scaglionati, con le stagioni di ogni serie viste da ogni paese e, dall'Italia, la data dell'ultima puntata → artifact `catalog`, poi lancia `watchlist.yml` e `ratings.yml` |
-| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN, più ultime puntate delle serie in watchlist e voti personali in stelline (`watchlist-extra.json`) → artifact `watchlist`, poi lancia `deploy.yml` |
+| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN, più ultime puntate delle serie in watchlist e voti personali in stelline (`watchlist-extra.json`; il sabato, lanciato da catalog con `full_ratings`, i voti di tutto il catalogo) → artifact `watchlist`, poi lancia `deploy.yml` |
 | `ratings.yml` | a fine catalog | voti AniList e MAL abbinati per id alle serie → artifact `ratings`, poi lancia `deploy.yml` |
 | `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | scarica gli artifact, genera la pagina, pubblica su Pages |
 
@@ -136,8 +136,9 @@ questo. I segnalibri sono il dato della scheda serie e tornano tutti in una chia
   puntata: le serie col `last_public` invariato non si rileggono. Il catalogo la legge ogni sabato per tutte le
   serie, la watchlist ogni giorno per le sue; la pagina prende la più recente.
 - Il voto in stelline dell'account: `/content-reviews/v2/user/<account>/rating/series/<id>`, campo `rating`
-  ("5s"… o vuoto). Un voto si cambia di rado: quelli già noti si tengono senza rileggerli, e ogni giorno si
-  chiedono solo quelli delle serie in watchlist ancora senza voto.
+  ("5s"… o vuoto). Un voto si cambia di rado: ogni giorno quelli già noti si tengono senza rileggerli e si
+  chiedono solo quelli delle serie in watchlist ancora senza voto; il run lanciato dal catalogo, una volta a
+  settimana, rilegge tutto il catalogo (`full_ratings`) e riparte da zero, così voti cambiati o tolti si correggono.
 - Nella pagina watchlist e voto sono simboli in fondo al titolo (segnalibro, pieno se preferita; stelline),
   e restano criteri di ordinamento nel pannello.
 
