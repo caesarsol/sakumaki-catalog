@@ -43,7 +43,9 @@ async function fetchRetry(url: string, init: RequestInit, onRetry: (kind: string
       return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     } catch (e) {
       if (attempt === 5) throw e;
-      onRetry((e as { code?: string }).code ?? (e as Error).name); // "TimeoutError", "ECONNRESET"…
+      // "ECONNRESET"…; il timeout è una DOMException con `code` numerico (23), che nel log non diceva niente
+      const { code, name } = e as { code?: unknown; name?: string };
+      onRetry(typeof code === "string" ? code : (name ?? "?"));
       await Bun.sleep(10_000 * attempt);
     }
   }

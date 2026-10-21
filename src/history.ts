@@ -20,6 +20,13 @@ if ((await $`git ls-remote --exit-code --heads origin history`.nothrow().quiet()
   await $`git worktree add --orphan -b history ${dir}`.quiet(); // la prima volta
 }
 
+// Quando arriva il catalogo, i suoi file non passati sono di paesi tolti da COUNTRIES (il Giappone, il 20 ottobre
+// 2026): senza toglierli resterebbero nell'ultimo commit come se fossero aggiornati. Il run dei voti non li tocca.
+const names = new Set(files.map((f) => f.split("/").at(-1)!));
+if ([...names].some((n) => n.startsWith("catalog-")))
+  for (const name of await Array.fromAsync(new Bun.Glob("catalog-*.ndjson").scan(dir)))
+    if (!names.has(name)) await Bun.file(`${dir}/${name}`).delete();
+
 const idOf = (line: string) => (JSON.parse(line) as { id?: string }).id ?? "";
 for (const file of files) {
   const name = file.split("/").at(-1)!;
@@ -38,6 +45,9 @@ if (!changed) {
   const date = new Date().toISOString().slice(0, 10);
   await $`git -C ${dir} -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm ${`dati del ${date}: ${files.map((f) => f.split("/").at(-1)).join(", ")}`}`;
   await $`git -C ${dir} push -q origin history`;
-  const size = (await $`git -C ${dir} count-objects -vH`.text()).match(/size-pack: (.*)/)?.[1];
-  console.log(`storico: commit sul ramo history con ${files.length} file (pacchetto locale ${size})`);
+  // Quanto pesa davvero il commit: il pacchetto sottile rispetto al precedente, coi delta, come lo manda il push.
+  // count-objects non serve: il fetch di pochi oggetti li scompatta, e contava tutto l'albero (22 MiB il 20 ottobre).
+  const pack = await $`git -C ${dir} pack-objects --revs --thin --stdout -q < ${new Response("HEAD\n^HEAD~1\n")}`.nothrow().quiet();
+  const size = pack.exitCode === 0 ? `${(pack.stdout.length / 1e3).toFixed(0)} kB` : "primo commit";
+  console.log(`storico: commit sul ramo history con ${files.length} file (${size} coi delta)`);
 }
