@@ -73,8 +73,8 @@ non valido e il run fallisce senza job.
 
 | workflow | quando | cosa fa |
 |---|---|---|
-| `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN, 5 paesi alla volta con i login scaglionati, con le stagioni di ogni serie viste da ogni paese → artifact `catalog`, poi lancia `watchlist.yml` e `ratings.yml` |
-| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN → artifact `watchlist`, poi lancia `deploy.yml` |
+| `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN, 5 paesi alla volta con i login scaglionati, con le stagioni di ogni serie viste da ogni paese e, dall'Italia, la data dell'ultima puntata → artifact `catalog`, poi lancia `watchlist.yml` e `ratings.yml` |
+| `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN, più ultime puntate delle serie in watchlist e voti personali in stelline (`watchlist-extra.json`) → artifact `watchlist`, poi lancia `deploy.yml` |
 | `ratings.yml` | a fine catalog | voti AniList e MAL abbinati per id alle serie → artifact `ratings`, poi lancia `deploy.yml` |
 | `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | scarica gli artifact, genera la pagina, pubblica su Pages |
 
@@ -127,6 +127,26 @@ finita, con il suo `series_id` ("given: on the other hand" in stagione 4, cioè 
 altre la lista discover semplicemente non le restituisce, e il caso di Alya, aperto dal 7 ottobre, era
 questo. I segnalibri sono il dato della scheda serie e tornano tutti in una chiamata. La chiamata
 `?content_ids=<id,…>` dà lo stesso dato per id scelti, anche 200 per volta.
+
+## Ultima puntata e voti personali
+
+- La colonna "Ultima puntata" è la `premium_available_date` più recente fra le puntate (`latest-episode.ts`):
+  quando la puntata arriva sul servizio, non quando va in onda, e i doppiaggi non la spostano. `last_public`
+  della serie non va bene da solo, perché lo spostano anche i doppiaggi, ma si sposta sempre quando arriva una
+  puntata: le serie col `last_public` invariato non si rileggono. Il catalogo la legge ogni sabato per tutte le
+  serie, la watchlist ogni giorno per le sue; la pagina prende la più recente.
+- Il voto in stelline dell'account: `/content-reviews/v2/user/<account>/rating/series/<id>`, campo `rating`
+  ("5s"… o vuoto). Ogni giorno per le serie in watchlist e quelle già votate, il sabato per tutto il catalogo.
+- Nella pagina watchlist e voto sono simboli in fondo al titolo (segnalibro, pieno se preferita; stelline),
+  e restano criteri di ordinamento nel pannello.
+
+## MAL: i timeout sono blocchi
+
+La sonda del 21 ottobre 2026: l'API ufficiale risponde in 82 ms di mediana (0,6 s al massimo), ma dopo circa 88
+chiamate in 44 s smette di rispondere a tutte per meno di un minuto, senza 429. Per questo il timeout è 2 s e i
+ritentativi aspettano 5, 10, 15, 20 s; il log dei voti riporta tempi di risposta e durata dei blocchi.
+L'API v2 dà `mean`, `rank`, `popularity`, `num_scoring_users`, `num_list_users`, `num_favorites` e
+`statistics.status`, non la distribuzione dei voti (solo Jikan, irraggiungibile dal runner).
 
 ## Limiti noti del punteggio
 

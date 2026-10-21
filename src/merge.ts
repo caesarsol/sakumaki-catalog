@@ -17,7 +17,7 @@ export type SeasonMatrix = { seasons: [title: string, episodes: number][]; by: R
 const dataDir = `${import.meta.dir}/../data`;
 const readNdjson = async <T>(path: string): Promise<T[]> => (await Bun.file(path).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
-const merged = new Map<string, SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number }; matrix?: SeasonMatrix }>();
+const merged = new Map<string, SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number }; matrix?: SeasonMatrix; latest_episode?: string | null }>();
 const seasonsBy = new Map<string, Map<string, Season[]>>(); // serie → paese → stagioni
 let found = 0;
 for (const { iso2 } of COUNTRIES) {
@@ -71,6 +71,13 @@ for (const [id, byCountry] of seasonsBy) {
     })),
   };
 }
+// L'ultima puntata, letta da catalog.ts solo dall'Italia (vedi latest-episode.ts); assente negli artifact di prima.
+const latestFile = Bun.file(`${dataDir}/catalog-latest-IT.ndjson`);
+if (await latestFile.exists())
+  for (const { id, latest } of await readNdjson<{ id: string; latest: string | null }>(`${dataDir}/catalog-latest-IT.ndjson`)) {
+    const s = merged.get(id);
+    if (s) s.latest_episode = latest;
+  }
 const all = [...merged.values()];
 await Bun.write(`${dataDir}/catalog.ndjson`, all.map((s) => JSON.stringify(s)).join("\n") + "\n");
 console.log(
