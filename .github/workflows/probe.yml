@@ -10,15 +10,12 @@ permissions:
   actions: write
 
 jobs:
-  myrating:
+  probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     env:
-      AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
-      API_BASE: ${{ secrets.API_BASE }}
+      GH_TOKEN: ${{ github.token }}
+      R: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
       - run: |
-          bun install --frozen-lockfile
-          bun run src/probe-myrating.ts
+          gh workflow run watchlist.yml --ref main -R "$R"
+          echo "watchlist lanciata"
