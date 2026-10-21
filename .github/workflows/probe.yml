@@ -10,15 +10,15 @@ permissions:
   actions: write
 
 jobs:
-  mal:
+  myrating:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
-      GH_TOKEN: ${{ github.token }}
+      AUTH_COOKIE: ${{ secrets.AUTH_COOKIE }}
+      API_BASE: ${{ secrets.API_BASE }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: |
           bun install --frozen-lockfile
-          bun run src/probe-fields.ts
+          bun run src/probe-myrating.ts
