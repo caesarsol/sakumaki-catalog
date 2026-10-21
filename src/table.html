@@ -108,7 +108,11 @@
   td.nomatch { color: var(--line); }
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
   td.flag.partial { opacity: .3; } /* disponibile, ma in quel paese mancano stagioni: il suggerimento dice quali */
-  th[data-k="wl_rank"], td.mine.start { border-left: 1px solid var(--line); padding-left: 8px; } /* stacca il blocco personale dalle bandiere */
+  /* Watchlist e voto personale in fondo al titolo: il titolo si accorcia con l'ellissi, i simboli restano. */
+  td.title a.full { display: flex; align-items: baseline; gap: 4px; }
+  td.title .tt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  td.title .mk { flex: none; color: var(--accent); font-size: 11px; display: inline-flex; align-items: center; gap: 3px; padding-right: 6px; }
+  td.title .mk svg { width: 8px; height: 11px; }
   .genres { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dist { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
   .bar { display: flex; gap: 1px; width: 9rem; height: 10px; position: relative; }
@@ -267,9 +271,8 @@
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num title="stagioni guardabili in Italia">Stagioni</th>
     <th data-k="episodes" data-num title="puntate guardabili in Italia; il totale fra tutti i paesi nel suggerimento della cella">Episodi</th>
-    <!-- le colonne dei paesi vengono inserite qui, prima del blocco personale che chiude la tabella -->
-    <th data-k="wl_rank" data-num title="★ preferita, ✓ in watchlist; ordinando vengono prima le preferite, poi il resto della watchlist">Watchlist</th>
-    <th data-k="wl_episode" data-num title="la puntata a cui sei arrivato secondo la watchlist: non è quante ne hai viste, è dove riprende; ✓ quando quella puntata l'hai finita">Puntata</th>
+    <th data-k="latest" data-num title="quando è arrivata sul servizio l'ultima puntata (non un doppiaggio o un sottotitolo): ogni giorno per le serie in watchlist, ogni sabato per le altre">Ultima puntata</th>
+    <!-- le colonne dei paesi vengono aggiunte in fondo dallo script -->
   </tr></thead>
   <tbody id="rows"></tbody>
 </table>
@@ -283,28 +286,47 @@
   const $ = (id) => document.getElementById(id);
   const countries = __COUNTRIES__;
   const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-  const firstOwnTh = document.querySelector('th[data-k="wl_rank"]'); // il blocco personale chiude la tabella: le bandiere vanno prima
+  const headRow = document.querySelector("thead tr");
   for (const c of countries) {
     const th = document.createElement("th");
     th.className = "flag"; th.dataset.k = `c:${c.iso2}`; th.dataset.num = ""; th.dataset.label = `${flag(c.iso2)} ${c.iso2}`;
     th.textContent = c.iso2; th.title = `${flag(c.iso2)} disponibile in ${c.iso2}; sbiadita se lì manca più del 10% delle puntate`;
-    firstOwnTh.before(th);
+    headRow.append(th);
   }
   const ths = [...document.querySelectorAll("thead th")];
   // La distribuzione è una colonna sola ma cinque criteri: `s:5` … `s:1`, la quota di ciascuna stella.
   const columns = ths.flatMap((th) => th.dataset.k === "s:5"
     ? [5, 4, 3, 2, 1].map((n) => ({ k: `s:${n}`, label: `Distribuzione ${n}★`, num: true }))
-    : [{ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }]);
+    : [{ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }])
+    // Criteri senza colonna: watchlist e voto stanno come simboli nel titolo, ma si ordina anche per loro dal pannello.
+    .concat([{ k: "wl_rank", label: "Watchlist (preferite prima)", num: true }, { k: "my_rating", label: "Il mio voto", num: true }]);
   const labelOf = (k) => columns.find((c) => c.k === k)?.label ?? k;
   /** Il clic sulla colonna della distribuzione agisce sulla stella già in pila, altrimenti sulla 5★. */
   const keyOf = (th) => (th.dataset.k === "s:5" ? sorts.find((s) => s.k.startsWith("s:"))?.k ?? "s:5" : th.dataset.k);
 
   const fmt = new Intl.NumberFormat("it-IT");
-  const yes = (b) => (b ? "✓" : "");
   const episodeLabel = (r) => (r.wl_season < 0 ? "" : `S${r.wl_season}${r.wl_episode >= 0 ? `·E${r.wl_episode}` : ""}`);
   const watchlistTitle = (r) =>
     !r.in_watchlist ? "non in watchlist"
     : [r.wl_fav ? "preferita" : "in watchlist", episodeLabel(r), r.wl_watched ? "puntata finita" : r.wl_new ? "mai iniziata" : "iniziata"].filter(Boolean).join(" · ");
+  // Segnalibro pieno per le preferite, vuoto per il resto della watchlist; poi le tue stelline.
+  const bookmark = (full) => `<svg viewBox="0 0 8 11" aria-hidden="true"><path d="M.5.5h7v10L4 7.6.5 10.5z" fill="${full ? "currentColor" : "none"}" stroke="currentColor"/></svg>`;
+  const marks = (r) => {
+    const tip = [r.in_watchlist && watchlistTitle(r), r.my_rating && `il tuo voto: ${r.my_rating}★`].filter(Boolean).join(" · ");
+    return r.in_watchlist || r.my_rating
+      ? `<span class="mk" title="${esc(tip)}">${r.in_watchlist ? bookmark(r.wl_fav) : ""}${r.my_rating ? "★".repeat(r.my_rating) : ""}</span>`
+      : "";
+  };
+  const dateFmt = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "short" });
+  const monthFmt = new Intl.DateTimeFormat("it-IT", { month: "short", year: "numeric" });
+  const fullFmt = new Intl.DateTimeFormat("it-IT", { dateStyle: "long", timeStyle: "short" });
+  const thisYear = new Date().getFullYear();
+  /** Giorno e mese quest'anno, mese e anno prima: nella colonna serve capire a colpo d'occhio se è recente. */
+  const latestLabel = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.getFullYear() === thisYear ? dateFmt.format(d) : monthFmt.format(d);
+  };
   /** Le puntate sotto il titolo; per le serie in watchlist il totale e le viste vengono da watchlist-progress.ts, che le conta sulla stessa lista di puntate. */
   const epsStrip = (r) => {
     const n = r.ep_total || r.episodes, k = Math.min(r.ep_done || 0, n);
@@ -446,7 +468,7 @@
   const ROW_H = 42;
   /** Una funzione per colonna, nell'ordine delle intestazioni. */
   const cells = [
-    (r) => `<td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>`,
+    (r) => `<td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}"><span class="tt">${esc(r.title)}</span>${marks(r)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>`,
     (r) => `<td class="num">${r.weighted.toFixed(3)}</td>`,
     (r) => `<td class="num">${r.lcb.toFixed(3)}</td>`,
     (r) => `<td class="num">${r.rating.toFixed(3)}</td>`,
@@ -457,12 +479,11 @@
     (r) => `<td class="num">${r.year ?? ""}</td>`,
     (r) => `<td class="num">${r.seasons}</td>`,
     (r) => `<td class="num"${r.episodes !== r.episodes_all ? ` title="${r.episodes} guardabili in Italia, ${r.episodes_all} contando tutti i paesi"` : ""}>${r.episodes}</td>`,
+    (r) => `<td class="num"${r.latest ? ` title="${fullFmt.format(new Date(r.latest))}"` : ""}>${latestLabel(r.latest)}</td>`,
     ...countries.map((c) => (r) => {
       const p = r.partial[c.iso2];
       return `<td class="flag${p ? " partial" : ""}"${p ? ` title="${esc(`${c.iso2}: ${p}`)}"` : ""}>${r.countries.includes(c.iso2) ? flag(c.iso2) : ""}</td>`;
     }),
-    (r) => `<td class="mine start" title="${esc(watchlistTitle(r))}">${r.wl_fav ? "★" : yes(r.in_watchlist)}</td>`,
-    (r) => `<td class="num mine">${episodeLabel(r)}${r.wl_watched ? " ✓" : ""}</td>`,
   ];
   const plain = (html) => html.replace(/<[^>]*>/g, "");
   /**

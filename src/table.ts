@@ -23,7 +23,7 @@ const PARTIAL_SHARE = 0.1;
 const readNdjson = async <T>(path: string): Promise<T[]> =>
   (await Bun.file(path).text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
-type Merged = SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number }; matrix?: SeasonMatrix };
+type Merged = SeriesObject & { countries: string[]; availability?: Record<string, Availability>; union?: { seasons: number; episodes: number }; matrix?: SeasonMatrix; latest_episode?: string | null };
 const catalog = await readNdjson<Merged>(`${dataDir}/catalog.ndjson`);
 const countries = COUNTRIES.filter((c) => catalog.some((s) => s.countries.includes(c.iso2))); // solo i paesi presenti nei dati: un download fallito non lascia una colonna vuota
 let progress: Record<string, Progress> = {};
@@ -31,6 +31,11 @@ const progressFile = Bun.file(`${dataDir}/watchlist-progress.json`); // in CI ar
 const watchlistFile = Bun.file(`${dataDir}/watchlist.json`); // in locale di solito c'è la watchlist intera
 if (await progressFile.exists()) progress = await progressFile.json();
 else if (await watchlistFile.exists()) progress = progressBySeries(((await watchlistFile.json()) as { data: WatchlistItem[] }).data);
+// Ultime puntate delle serie in watchlist e voti personali, dal run quotidiano della watchlist (vedi watchlist.ts).
+const extraFile = Bun.file(`${dataDir}/watchlist-extra.json`);
+const extra: { latest: Record<string, { latest: string | null }>; my_rating: Record<string, number> } | null = (await extraFile.exists()) ? await extraFile.json() : null;
+/** La data più recente fra catalogo (sabato) e watchlist (ogni giorno); "" se non la si conosce, per l'ordinamento. */
+const latestOf = (s: Merged) => [s.latest_episode, extra?.latest[s.id]?.latest].filter((d): d is string => !!d).sort().at(-1) ?? "";
 // Voti esterni da ratings.yml: se l'artifact manca le due colonne restano vuote, invece di dire "nessun abbinamento" a tutte.
 const externalFile = Bun.file(`${dataDir}/ratings-external.json`);
 const external: ExternalRatings | null = (await externalFile.exists()) ? await externalFile.json() : null;
@@ -142,6 +147,8 @@ const rows = top.map((s) => ({
   wl_watched: progress[s.id]?.fully_watched ?? false,
   wl_new: progress[s.id]?.never_watched ?? false,
   wl_fav: progress[s.id]?.is_favorite ?? false,
+  my_rating: extra?.my_rating[s.id] ?? 0, // le tue stelline, 0 se non l'hai votata
+  latest: latestOf(s), // ISO, così l'ordinamento per testo è anche per data
   ep_done: progress[s.id]?.ep_done ?? 0,
   ep_total: progress[s.id]?.ep_total ?? 0,
   ep_started: progress[s.id]?.ep_started ?? false,
