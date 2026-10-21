@@ -42,8 +42,9 @@
   .group input { width: 4.5rem; height: 100%; padding: 0; border: 0; background: none; font: inherit; font-size: .9rem; color: var(--fg); }
   #count { color: var(--muted); margin-left: auto; }
 
-  /* Watchlist: i tre stati si escludono a vicenda, quindi un segmentato al posto di due caselle indipendenti;
-     i segmenti si nominano da soli, così non serve un'etichetta esterna. */
+  /* Watchlist: le quattro scelte si escludono a vicenda, quindi un segmentato al posto di caselle indipendenti.
+     Icone al posto delle parole, le stesse del titolo (segnalibro vuoto, pieno per le preferite): il nome sta
+     nel suggerimento e nell'aria-label. */
   .seg { display: inline-flex; }
   .seg input { position: absolute; opacity: 0; width: 0; height: 0; }
   .seg span { display: inline-flex; align-items: center; cursor: pointer; border-radius: 0; margin-left: -1px; }
@@ -51,6 +52,8 @@
   .seg label:last-of-type span { border-radius: 0 6px 6px 0; }
   .seg input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
   .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seg span { min-width: 2.75rem; justify-content: center; } /* solo icone: un bersaglio comodo per il pollice */
+  .seg .ic { width: 16px; height: 16px; }
 
   table { border-collapse: collapse; width: 100%; font-size: calc(.9rem - 2px); }
   th, td { padding: 6px var(--cell-pad); border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; white-space: nowrap; }
@@ -238,9 +241,10 @@
   <select id="fCountries" multiple></select>
   <select id="fGenres" multiple></select>
   <span class="seg" role="radiogroup" aria-label="Watchlist">
-    <label><input type="radio" name="wl" value="" checked><span title="tutte le serie, in watchlist o no">Tutte</span></label>
-    <label><input type="radio" name="wl" value="in"><span title="solo le serie in watchlist">In watchlist</span></label>
-    <label><input type="radio" name="wl" value="out"><span title="solo le serie fuori dalla watchlist">Fuori</span></label>
+    <label><input type="radio" name="wl" value="" checked aria-label="tutte le serie"><span title="tutte le serie, in watchlist o no"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></span></label>
+    <label><input type="radio" name="wl" value="in" aria-label="in watchlist"><span title="le serie in watchlist, preferite comprese"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5h9v13L8 11.2 3.5 14.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span></label>
+    <label><input type="radio" name="wl" value="fav" aria-label="preferite"><span title="solo le preferite"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5h9v13L8 11.2 3.5 14.5z" fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span></label>
+    <label><input type="radio" name="wl" value="out" aria-label="fuori dalla watchlist"><span title="solo le serie fuori dalla watchlist"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5h9v13L8 11.2 3.5 14.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M1.5 1.5l13 13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span></label>
   </span>
 </div>
 <div class="filters" id="paneVoti" role="tabpanel" hidden>
@@ -384,7 +388,7 @@
   }
   const fCountries = triFilter($("fCountries"), countries.map((c) => ({ value: c.iso2, text: `${flag(c.iso2)} ${c.iso2}` })), "Tutti i paesi", "Filtra per paese: ＋ presente, − assente");
   const fGenres = triFilter($("fGenres"), [...new Set(rows.flatMap((r) => r.genres))].sort().map((g) => ({ value: g, text: g })), "Tutti i generi", "Filtra per genere: ＋ presente, − assente");
-  const watchlist = () => document.querySelector("input[name=wl]:checked").value; // "" | "in" | "out"
+  const watchlist = () => document.querySelector("input[name=wl]:checked").value; // "" | "in" | "fav" | "out"
 
   /* ---- ordinamento multiplo ----------------------------------------------------------------
      `sorts` è la pila di criteri in ordine di priorità, condivisa da intestazioni e pannello. */
@@ -449,7 +453,7 @@
       (!q || r.title.toLowerCase().includes(q)) &&
       cIn.every((c) => r.countries.includes(c)) && !cOut.some((c) => r.countries.includes(c)) &&
       gIn.every((g) => r.genres.includes(g)) && !gOut.some((g) => r.genres.includes(g)) &&
-      (wl !== "in" || r.in_watchlist) && (wl !== "out" || !r.in_watchlist));
+      (wl !== "in" || r.in_watchlist) && (wl !== "fav" || r.wl_fav) && (wl !== "out" || !r.in_watchlist));
     visible.sort(compare);
     distStar = Number(sorts.find((s) => s.k.startsWith("s:"))?.k.slice(2)) || 0;
     if (!sizer) sizer = sizerRow();
