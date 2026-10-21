@@ -61,6 +61,8 @@ non valido e il run fallisce senza job.
 - La tabella è virtualizzata (TanStack Virtual, `page-vendor.ts` impacchettato da `table.ts`): nella pagina
   ci sono solo le righe visibili più un margine. Le righe devono restare tutte alte uguali, `ROW_H` nello
   script e l'altezza di `th, tbody td` nel CSS; una riga "metro" invisibile tiene ferme le larghezze.
+- Le colonne dei voti (Voto, V Bayes, V AniList, V MAL) hanno dietro al numero una barra sulla scala 1–5, del colore
+  della fonte, e sotto in piccolo i votanti; i votanti e le quote per stella si ordinano dal pannello, senza colonna.
 - Il dettaglio di una serie (distribuzioni dei voti di tutte le fonti su 5 fasce in un solo grafico, matrice stagioni × paesi, voci AniList/MAL) è un
   pannello che si apre dal basso toccando la riga, non una riga che si allarga: con la virtualizzazione le
   righe devono restare alte uguali, e sul telefono una matrice dentro una riga non si leggerebbe.
@@ -149,11 +151,3 @@ chiamate in 44 s smette di rispondere a tutte per meno di un minuto, senza 429. 
 ritentativi aspettano 5, 10, 15, 20 s; il log dei voti riporta tempi di risposta e durata dei blocchi.
 L'API v2 dà `mean`, `rank`, `popularity`, `num_scoring_users`, `num_list_users`, `num_favorites` e
 `statistics.status`, non la distribuzione dei voti (solo Jikan, irraggiungibile dal runner).
-
-## Limiti noti del punteggio
-
-`rating_lcb` (colonna "V LimConf") è media meno 1,96 volte la deviazione standard osservata diviso la
-radice dei voti. Con voti tutti uguali la deviazione è zero e il limite coincide con la media: **una serie
-con un solo voto da 5 ha LCB 5**, cioè il contrario di quel che la colonna vuole dire. La correzione
-proposta e non ancora fatta è un prior sulla dispersione, sd² = (n·sd² + k·σ₀²)/(n + k) con k ≈ 3 e
-σ₀ ≈ 1, che pesa i pochi voti senza duplicare `rating_weighted`.

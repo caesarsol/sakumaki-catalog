@@ -54,22 +54,17 @@ if (missing.length) {
   for (const [id, p] of missing) console.log(`  ${id}  ${(p.type ?? "?").padEnd(8)} ${p.title || "(titolo non disponibile)"}`);
 }
 
-/** Media e deviazione standard dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
-function starStats(s: SeriesObject): { mean: number; sd: number } {
+/** Media dai conteggi per stella ("94.8K" ha 3 cifre significative; la somma coincide col totale entro lo 0,2 %). */
+function fineRating(s: SeriesObject): number {
   let sum = 0;
-  let sumSq = 0;
   let n = 0;
   for (const stars of [1, 2, 3, 4, 5] as const) {
     const count = starCount(s.rating[`${stars}s`]);
     sum += stars * count;
-    sumSq += stars * stars * count;
     n += count;
   }
-  if (!n) return { mean: Number(s.rating.average), sd: 0 };
-  const mean = sum / n;
-  return { mean, sd: Math.sqrt(Math.max(0, sumSq / n - mean * mean)) };
+  return n ? sum / n : Number(s.rating.average);
 }
-const fineRating = (s: SeriesObject) => starStats(s).mean;
 const starCount = (b: SeriesObject["rating"]["1s"]) => parseFloat(b.displayed) * (b.unit === "K" ? 1e3 : b.unit === "M" ? 1e6 : 1);
 /**
  * Quota di ogni stella ricalcolata dai conteggi, a un decimale. La `percentage` dell'API è intera e
@@ -79,11 +74,6 @@ function starShares(s: SeriesObject) {
   const buckets = ([1, 2, 3, 4, 5] as const).map((k) => s.rating[`${k}s`]);
   const n = buckets.reduce((acc, b) => acc + starCount(b), 0);
   return buckets.map((b) => ({ pct: n ? Math.round((starCount(b) / n) * 1000) / 10 : b.percentage, shown: b.displayed + b.unit }));
-}
-/** Limite inferiore dell'intervallo di confidenza al 95 % della media: scende con pochi voti, non sale mai. Tagliato a 1. */
-function lowerBound(s: SeriesObject): number {
-  const { mean, sd } = starStats(s);
-  return Math.max(1, mean - 1.96 * (sd / Math.sqrt(s.rating.total || 1)));
 }
 
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -108,7 +98,6 @@ const top = catalog
     ...s,
     rating_fine: round3(fineRating(s)),
     rating_weighted: round3(weighted(s)),
-    rating_lcb: round3(lowerBound(s)),
     in_watchlist: !!progress[s.id],
   }))
   .sort((a, b) => b.rating_weighted - a.rating_weighted);
@@ -120,7 +109,6 @@ const rows = top.map((s) => ({
   title: tidy(s.title),
   url: `${SITE_BASE}/series/${s.id}/${s.slug_title}`,
   rating: s.rating_fine,
-  lcb: s.rating_lcb,
   votes: s.rating.total,
   stars: starShares(s),
   year: s.series_metadata.series_launch_year,

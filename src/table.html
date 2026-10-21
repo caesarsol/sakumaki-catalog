@@ -17,7 +17,8 @@
     --title-w: 26rem; /* larghezza della colonna del titolo: fissa, così la striscia si calcola tutta in CSS */
     --strip: 3rem; /* quanto del titolo resta visibile a tabella scorsa. In rem e non in ch: il ch dipende dal font della cella, e l'intestazione in grassetto si fermava più in là delle righe */
     --cell-pad: 5px; /* il padding orizzontale delle celle, che serve anche in calc() */
-    --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281; /* rampa ordinale blu, validata (dataviz) */
+    /* Barre dei voti: il colore della fonte, lo stesso del pannello di dettaglio, schiarito perché il numero sopra resti nero. */
+    --c-own: #2a78d633; --c-al: #eb683433; --c-mal: #1baf7a33;
   }
   /* Layout a colonna a tutta altezza: titolo e filtri fissi, solo .scroller scorre (in entrambe le direzioni); l'intestazione della tabella è sticky dentro di esso. */
   html, body { height: 100%; }
@@ -103,7 +104,6 @@
   :root { --ep: #dcd6ce; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
   th.sorted { color: var(--accent); }
-  th .star { color: var(--accent); font-size: .85em; } /* quale stella sta ordinando, quando non è la 5★ */
   th.sorted::after { content: "\00a0▲" attr(data-ord); } /* data-ord: posizione nella pila di ordinamento, vuota quando il criterio è uno solo */
   th.sorted.desc::after { content: "\00a0▼" attr(data-ord); }
   td.num, th[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
@@ -116,17 +116,14 @@
   td.title .tt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   td.title .mk { flex: none; color: var(--accent); font-size: 11px; display: inline-flex; align-items: center; gap: 3px; padding-right: 6px; }
   td.title .mk svg { width: 8px; height: 11px; }
+  /* Voti: barra dietro al numero, da sinistra, vuota a 1 e piena a 5 (scala comune, così le colonne si confrontano);
+     sotto, piccoli, i votanti. Due righe da 42px senza allungare la riga. La barra è un ::before e non un gradiente
+     per avere la testa arrotondata; isolation la tiene sopra lo sfondo della cella e sotto il testo. Un px d'aria a
+     sinistra e due sopra e sotto, così celle e righe vicine non si fondono in un blocco unico. */
+  td.score { position: relative; isolation: isolate; line-height: 1.15; }
+  td.score::before { content: ""; position: absolute; left: 1px; top: 2px; bottom: 2px; width: calc((100% - 2px) * var(--p)); background: var(--c); border-radius: 0 3px 3px 0; z-index: -1; }
+  td.score small { display: block; font-size: 9px; color: var(--muted); }
   .genres { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dist { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
-  .bar { display: flex; gap: 1px; width: 9rem; height: 10px; position: relative; }
-  /* La quota della stella per cui si ordina, piccola accanto alla barra. Lo spazio c'è sempre, anche vuoto:
-     altrimenti la colonna cambierebbe larghezza a ogni cambio di ordinamento. */
-  .dist small { width: 3.2em; font-size: 9px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-  .bar span { border-radius: 1px; min-width: 0; }
-  /* Il voto medio sulla scala 1–5 della barra: un triangolo dentro i 10 px della barra, che quindi non cresce in altezza. */
-  .bar .vote { position: absolute; top: 0; width: 0; height: 0; border: 4px solid transparent; border-top: 5px solid #000; border-bottom: 0; transform: translateX(-50%); }
-  .legend { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
-  .legend i { width: 10px; height: 10px; border-radius: 1px; display: inline-block; }
 
   /* Pannello di dettaglio di una serie: si apre dal basso, sopra la tabella. Non dentro la riga: la
      virtualizzazione conta su righe tutte alte uguali, e sul telefono una matrice dentro una riga non si legge. */
@@ -265,13 +262,10 @@
 <table>
   <thead><tr>
     <th data-k="title"><div class="peek"><div class="full">Titolo</div></div></th>
-    <th data-k="weighted" data-num title="media bayesiana che può solo abbassare il voto: min(voto, (v·voto + m·media catalogo)/(v+m)), m regolabile nei filtri">V Bayes</th>
-    <th data-k="lcb" data-num title="limite inferiore di confidenza al 95 %: voto − 1.96·σ/√v, con σ dalla distribuzione per stella; tagliato a 1">V LimConf</th>
-    <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella">Voto</th>
-    <th data-k="votes" data-num>Votanti</th>
-    <th data-k="s:5" data-num title="1★→5★ chiaro→scuro; larghezze ∝ quota di voti; ▼ il voto medio, con la barra letta come scala da 1 a 5; il clic ordina per quota di 5★, le altre stelle stanno nel pannello dell'ordinamento">Distribuzione<span class="star"></span> <span class="legend"><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i><i style="background:var(--s5)"></i></span></th>
-    <th data-k="al" data-num title="voto su AniList portato sulla scala 0–5 (centesimi / 20): media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">V AniList</th>
-    <th data-k="mal" data-num title="voto su MyAnimeList portato sulla scala 0–5 (decimi / 2): media delle stagioni e dei film abbinati, pesata sui votanti. ✗ nessun abbinamento">V MAL</th>
+    <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella; sotto, i votanti">Voto</th>
+    <th data-k="weighted" data-num title="media bayesiana che può solo abbassare il voto: min(voto, (v·voto + m·media catalogo)/(v+m)), m regolabile nei filtri; sotto, i votanti">V Bayes</th>
+    <th data-k="al" data-num title="voto su AniList portato sulla scala 0–5 (centesimi / 20): media delle stagioni e dei film abbinati, pesata sui votanti; sotto, i votanti. ✗ nessun abbinamento">V AniList</th>
+    <th data-k="mal" data-num title="voto su MyAnimeList portato sulla scala 0–5 (decimi / 2): media delle stagioni e dei film abbinati, pesata sui votanti; sotto, i votanti. ✗ nessun abbinamento">V MAL</th>
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num title="stagioni guardabili in Italia">Stagioni</th>
     <th data-k="episodes" data-num title="puntate guardabili in Italia; il totale fra tutti i paesi nel suggerimento della cella">Episodi</th>
@@ -298,15 +292,18 @@
     headRow.append(th);
   }
   const ths = [...document.querySelectorAll("thead th")];
-  // La distribuzione è una colonna sola ma cinque criteri: `s:5` … `s:1`, la quota di ciascuna stella.
-  const columns = ths.flatMap((th) => th.dataset.k === "s:5"
-    ? [5, 4, 3, 2, 1].map((n) => ({ k: `s:${n}`, label: `Distribuzione ${n}★`, num: true }))
-    : [{ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }])
-    // Criteri senza colonna: watchlist e voto stanno come simboli nel titolo, ma si ordina anche per loro dal pannello.
-    .concat([{ k: "wl_rank", label: "Watchlist (preferite prima)", num: true }, { k: "my_rating", label: "Il mio voto", num: true }]);
+  const columns = ths.map((th) => ({ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }))
+    // Criteri senza colonna, solo dal pannello: i votanti stanno piccoli sotto i voti, watchlist e voto personale
+    // come simboli nel titolo, e la quota di ogni stella (`s:5` … `s:1`) nel grafico del dettaglio.
+    .concat([
+      { k: "votes", label: "Votanti", num: true },
+      { k: "al_votes", label: "Votanti AniList", num: true },
+      { k: "mal_votes", label: "Votanti MAL", num: true },
+      ...[5, 4, 3, 2, 1].map((n) => ({ k: `s:${n}`, label: `Distribuzione ${n}★`, num: true })),
+      { k: "wl_rank", label: "Watchlist (preferite prima)", num: true },
+      { k: "my_rating", label: "Il mio voto", num: true },
+    ]);
   const labelOf = (k) => columns.find((c) => c.k === k)?.label ?? k;
-  /** Il clic sulla colonna della distribuzione agisce sulla stella già in pila, altrimenti sulla 5★. */
-  const keyOf = (th) => (th.dataset.k === "s:5" ? sorts.find((s) => s.k.startsWith("s:"))?.k ?? "s:5" : th.dataset.k);
 
   const fmt = new Intl.NumberFormat("it-IT");
   const episodeLabel = (r) => (r.wl_season < 0 ? "" : `S${r.wl_season}${r.wl_episode >= 0 ? `·E${r.wl_episode}` : ""}`);
@@ -339,14 +336,14 @@
     const tip = r.ep_total ? `${k} viste su ${n} puntate${half ? `, la ${k + 1}ª iniziata` : ""}` : `${n} puntate`;
     return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--half:${half};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
   };
-  // Una quota che nella barra (9rem, 144px) varrebbe meno di un pixel non si vedrebbe, ma il suo spazio da 1px sì,
-  // e sembrerebbe una stella con dei voti: la si toglie con il suo spazio. Resta nel suggerimento al passaggio.
-  const MIN_PCT = 100 / 144;
-  /** Voto esterno sulla scala 0–5: il numero, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
-  const extCell = (score, raw, scale, votes, n, site) =>
+  /** Un voto sulla scala 1–5: il numero, la barra dietro e i votanti sotto. */
+  const scoreCell = (score, digits, votes, color, tip = "") =>
+    `<td class="num score" style="--p:${Math.min(1, Math.max(0, (score - 1) / 4)).toFixed(3)};--c:var(--c-${color})"${tip && ` title="${tip}"`}>${score.toFixed(digits)}<small>${fmt.format(votes)}</small></td>`;
+  /** Voto esterno sulla scala 0–5: il voto, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
+  const extCell = (score, raw, scale, votes, n, site, color) =>
     score === -2 ? `<td></td>`
     : score < 0 ? `<td class="num nomatch" title="nessuna voce di ${site} abbinata">✗</td>`
-    : `<td class="num" title="${site}: ${raw}/${scale} · ${fmt.format(votes)} votanti · ${n} ${n === 1 ? "voce" : "voci (stagioni o film)"}">${score.toFixed(2)}</td>`;
+    : scoreCell(score, 2, votes, color, `${site}: ${raw}/${scale} · ${fmt.format(votes)} votanti · ${n} ${n === 1 ? "voce" : "voci (stagioni o film)"}`);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   /* ---- filtri multi-selezione a tre stati -------------------------------------------------
@@ -431,13 +428,11 @@
       columns.filter((c) => !sorts.some((s) => s.k === c.k)).map((c) => `<option value="${esc(c.k)}">${esc(c.label)}</option>`).join("");
     const ord = "¹²³⁴⁵⁶⁷⁸⁹";
     for (const th of ths) {
-      const k = keyOf(th);
+      const k = th.dataset.k;
       const i = sorts.findIndex((s) => s.k === k);
       th.classList.toggle("sorted", i >= 0);
       th.classList.toggle("desc", i >= 0 && sorts[i].desc);
       th.dataset.ord = i >= 0 && sorts.length > 1 ? ord[i] ?? "" : "";
-      const star = th.querySelector(".star");
-      if (star) star.textContent = k === "s:5" ? "" : ` ${k.slice(2)}★`;
     }
   }
 
@@ -455,7 +450,6 @@
       gIn.every((g) => r.genres.includes(g)) && !gOut.some((g) => r.genres.includes(g)) &&
       (wl !== "in" || r.in_watchlist) && (wl !== "fav" || r.wl_fav) && (wl !== "out" || !r.in_watchlist));
     visible.sort(compare);
-    distStar = Number(sorts.find((s) => s.k.startsWith("s:"))?.k.slice(2)) || 0;
     if (!sizer) sizer = sizerRow();
     virtualizer.setOptions({ ...virtualizer.options, count: visible.length });
     virtualizer._willUpdate();
@@ -473,13 +467,10 @@
   /** Una funzione per colonna, nell'ordine delle intestazioni. */
   const cells = [
     (r) => `<td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}"><span class="tt">${esc(r.title)}</span>${marks(r)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>`,
-    (r) => `<td class="num">${r.weighted.toFixed(3)}</td>`,
-    (r) => `<td class="num">${r.lcb.toFixed(3)}</td>`,
-    (r) => `<td class="num">${r.rating.toFixed(3)}</td>`,
-    (r) => `<td class="num">${fmt.format(r.votes)}</td>`,
-    (r) => `<td title="${r.stars.map((s, i) => `${i + 1}★ ${s.shown} (${s.pct}%)`).join("  ·  ")}"><div class="dist"><div class="bar">${r.stars.map((s, i) => s.pct >= MIN_PCT ? `<span style="flex:${s.pct} 0 0;background:var(--s${i + 1})"></span>` : "").join("")}${r.votes ? `<i class="vote" style="left:${((r.rating - 1) / 4) * 100}%"></i>` : ""}</div><small>${distStar && r.votes ? `${r.stars[distStar - 1].pct.toFixed(1)}%` : ""}</small></div></td>`,
-    (r) => extCell(r.al, r.al_raw, 100, r.al_votes, r.al_n, "AniList"),
-    (r) => extCell(r.mal, r.mal_raw, 10, r.mal_votes, r.mal_n, "MAL"),
+    (r) => scoreCell(r.rating, 3, r.votes, "own"),
+    (r) => scoreCell(r.weighted, 3, r.votes, "own"),
+    (r) => extCell(r.al, r.al_raw, 100, r.al_votes, r.al_n, "AniList", "al"),
+    (r) => extCell(r.mal, r.mal_raw, 10, r.mal_votes, r.mal_n, "MAL", "mal"),
     (r) => `<td class="num">${r.year ?? ""}</td>`,
     (r) => `<td class="num">${r.seasons}</td>`,
     (r) => `<td class="num"${r.episodes !== r.episodes_all ? ` title="${r.episodes} guardabili in Italia, ${r.episodes_all} contando tutti i paesi"` : ""}>${r.episodes}</td>`,
@@ -494,15 +485,24 @@
    * La tabella calcola le larghezze delle colonne sulle righe presenti: con le righe che cambiano scorrendo,
    * le colonne si allargherebbero e restringerebbero. La riga metro mette in ogni colonna il testo più lungo
    * fra tutte le serie, solo testo e con la classe della cella, così pesa sulla larghezza e non sull'altezza.
-   * Le celle a larghezza fissa (titolo, distribuzione, bandiere) non ne hanno bisogno, ma non fa danno.
+   * Le celle a larghezza fissa (titolo, bandiere) non ne hanno bisogno, ma non fa danno. Le celle dei voti hanno
+   * due righe di corpo diverso, numero e votanti sotto: si misura il più lungo di ciascuna, e la riga piccola resta
+   * un <small>, che a corpo pieno allargherebbe la colonna più del necessario.
    */
   let sizer = "";
   function sizerRow() {
     return `<tr class="sizer" aria-hidden="true">${cells.map((f) => {
-      let best = "", len = -1;
-      for (const r of rows) { const text = plain(f(r)); if (text.length > len) { len = text.length; best = text; } }
-      const cls = f(rows[0]).match(/^<td class="([^"]*)"/)?.[1] ?? "";
-      return `<td class="${cls}">${best}</td>`;
+      const best = ["", ""];
+      let cls = "";
+      for (const r of rows) {
+        const html = f(r);
+        plain(html.replace("<small>", "\n")).split("\n").forEach((t, i) => {
+          if (t.length <= best[i].length) return;
+          best[i] = t;
+          if (!i) cls = html.match(/^<td class="([^"]*)"/)?.[1] ?? ""; // quella della riga più lunga: la prima potrebbe essere una ✗
+        });
+      }
+      return `<td class="${cls}">${best[0]}${best[1] ? `<small>${best[1]}</small>` : ""}</td>`;
     }).join("")}</tr>`;
   }
   const pad = (n) => (n > 0 ? `<tr class="pad" style="height:${n * ROW_H}px"><td colspan="${cells.length}"></td></tr>` : "");
@@ -517,7 +517,6 @@
     $("rows").innerHTML = sizer + pad(first) + items.map((it) => `<tr data-i="${it.index}">${cells.map((f) => f(visible[it.index])).join("")}</tr>`).join("") + pad(visible.length - last - 1);
   }
   let visible = [];
-  let distStar = 0; // la stella per cui si ordina, se si ordina per distribuzione: la sua quota si scrive accanto alla barra
   const { Virtualizer, elementScroll, observeElementOffset, observeElementRect } = VirtualCore;
   const virtualizer = new Virtualizer({
     count: 0, getScrollElement: () => document.querySelector(".scroller"), estimateSize: () => ROW_H, overscan: 12,
@@ -527,7 +526,7 @@
   });
   virtualizer._didMount();
 
-  for (const th of ths) th.onclick = () => { clickSort(keyOf(th)); render(); };
+  for (const th of ths) th.onclick = () => { clickSort(th.dataset.k); render(); };
 
   /* ---- pannello di dettaglio ------------------------------------------------------------- */
   /* Le fonti dei voti nel dettaglio, in ordine fisso: il colore segue la fonte, non la posizione. */
