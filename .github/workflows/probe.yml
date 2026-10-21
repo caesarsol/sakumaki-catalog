@@ -21,16 +21,3 @@ jobs:
       - run: |
           bun install --frozen-lockfile
           bun run src/probe.ts
-  dates:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      API_BASE: ${{ secrets.API_BASE }}
-      NORD_USER: ${{ secrets.NORD_USER }}
-      NORD_PASS: ${{ secrets.NORD_PASS }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - run: |
-          bun install --frozen-lockfile
-          bun run src/probe-dates.ts

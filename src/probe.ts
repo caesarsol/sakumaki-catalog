@@ -9,10 +9,16 @@ const ids: number[] = [];
 for (let page = 1; page <= 16; page++) {
   const res = await fetch("https://graphql.anilist.co", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ query: `{ Page(page: ${page}, perPage: 50) { media(type: ANIME, sort: POPULARITY_DESC) { idMal } } }` }),
   });
+  if (res.status === 429) {
+    await Bun.sleep(65_000);
+    page--;
+    continue;
+  }
   const b: any = await res.json();
+  if (!b.data) throw new Error(`AniList: HTTP ${res.status} ${JSON.stringify(b.errors ?? b).slice(0, 200)}`);
   for (const m of b.data.Page.media) if (m.idMal) ids.push(m.idMal);
   await Bun.sleep(2100);
 }
