@@ -65,10 +65,11 @@ non valido e il run fallisce senza job.
   della fonte, e sotto in piccolo i votanti; i votanti e le quote per stella si ordinano dal pannello, senza colonna.
 - Le formule (scheda ƒ) ordinano o filtrano con un'espressione sui dati della riga: voti `v v_al v_mal v_bayes`
   sulla scala 1–5, votanti `n n_al n_mal`, quote `s1`…`s5`, `sd` delle stelle e gli altri in `FX_VARS`. Il testo
-  diventa una funzione solo se ogni pezzo è un numero, un operatore o un nome di `FX_VARS`/`FX_FUNCS`: niente
-  stringhe né accesso a proprietà, così una formula incollata non esegue codice. Un dato che manca è NaN e
-  nell'ordinamento va in fondo in entrambi i versi; `avg sum min max` lo saltano. La colonna ƒ, subito dopo il
-  titolo, c'è solo quando una formula ordina.
+  si legge con un piccolo parser in un albero di funzioni, senza eval: può nominare solo i nomi di
+  `FX_VARS`/`FX_FUNCS`, così una formula incollata non esegue codice. Un dato che manca è NaN e si propaga come
+  NULL in SQL, anche nei confronti, in `and`/`or` e in `avg sum min max`; solo `ifnull(x, 0)` lo sostituisce.
+  Senza risultato una serie non passa il filtro e nell'ordinamento va in fondo in entrambi i versi. La colonna
+  ƒ, subito dopo il titolo, c'è solo quando una formula ordina.
 - Il dettaglio di una serie (distribuzioni dei voti di tutte le fonti su 5 fasce in un solo grafico, matrice stagioni × paesi, voci AniList/MAL) è un
   pannello che si apre dal basso toccando la riga, non una riga che si allarga: con la virtualizzazione le
   righe devono restare alte uguali, e sul telefono una matrice dentro una riga non si leggerebbe.

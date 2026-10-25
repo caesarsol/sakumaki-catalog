@@ -278,7 +278,7 @@
   <div class="fx-info" id="fxInfo"></div>
   <div class="fx-chips" id="fxChips"></div>
   <div id="fxActive" hidden>filtro <code></code><button id="fxOff" type="button" title="togli il filtro">✕</button></div>
-  <p class="hint">«Ordina» mette la formula al posto dell'ordinamento, «Filtra» tiene le serie per cui è vera. Voti <code>v v_al v_mal v_bayes</code> sulla scala 1–5, votanti <code>n n_al n_mal</code>, <code>s1</code>…<code>s5</code> la % di ogni stella, <code>sd</code> quanto sono sparse; tocca un nome qui sopra per sapere cos'è. <code>avg sum min max</code> saltano i dati che mancano, <code>coalesce(x, 0)</code> li sostituisce; altrove un dato che manca rende falso il confronto e manda la serie in fondo.</p>
+  <p class="hint">«Ordina» mette la formula al posto dell'ordinamento, «Filtra» tiene le serie per cui è vera. Voti <code>v v_al v_mal v_bayes</code> sulla scala 1–5, votanti <code>n n_al n_mal</code>, <code>s1</code>…<code>s5</code> la % di ogni stella, <code>sd</code> quanto sono sparse; tocca un nome qui sopra per sapere cos'è. Se manca un dato manca il risultato, anche in <code>avg</code>, <code>and</code> e <code>or</code>: la serie non passa il filtro e va in fondo. <code>ifnull(x, 0)</code> mette 0 dove x manca.</p>
 </div>
 <div id="paneOrdine" role="tabpanel" hidden>
   <ul id="sortList"></ul>
@@ -319,11 +319,11 @@
   const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
   /* ---- formule ----------------------------------------------------------------------------
      Un'espressione scritta nel pannello ƒ e calcolata per ogni serie: ordina (un criterio "f:<testo>" nella
-     pila, come gli altri) o filtra (tiene le serie per cui è vera). Il testo si scompone in pezzi e passa solo
-     se ognuno è un numero, un operatore o un nome dell'elenco: niente stringhe, punti o parentesi quadre,
-     quindi la funzione compilata non arriva ad altro che alle variabili della serie e alle funzioni qui sotto.
-     Un dato che manca (nessun voto MAL, serie non votata) è NaN: si propaga nei conti, rende falsi i
-     confronti e nell'ordinamento va in fondo in entrambi i versi. */
+     pila, come gli altri) o filtra (tiene le serie per cui è vera). Un dato che manca (nessun voto MAL, serie
+     non votata) è NaN e si propaga come in SQL con NULL: in +, nei confronti, in and/or e nelle funzioni,
+     tranne ifnull che lo sostituisce. Senza risultato una serie non passa il filtro e nell'ordinamento va in
+     fondo in entrambi i versi. Scrivere ifnull dove serve è meglio che saltare di nascosto il dato mancante:
+     una media sul solo voto Crunchyroll, con trenta votanti, finirebbe in cima. */
   const FX_VARS = {
     v: "voto Crunchyroll, 1–5", v_bayes: "V Bayes, 1–5 (dipende da m nella scheda Voti)", v_al: "voto AniList, 1–5", v_mal: "voto MAL, 1–5",
     n: "votanti Crunchyroll", n_al: "votanti AniList", n_mal: "votanti MAL",
@@ -332,20 +332,21 @@
     my: "il tuo voto, 1–5; manca se non l'hai votata", anno: "anno di uscita", ep: "puntate guardabili in Italia", stagioni: "stagioni guardabili in Italia",
     giorni: "giorni dall'ultima puntata", viste: "puntate viste, per le serie in watchlist", wl: "0 fuori watchlist, 1 dentro, 2 preferita",
   };
-  const present = (xs) => xs.map(Number).filter((x) => !Number.isNaN(x));
+  // Un dato che manca rende mancante il risultato, come con +: anche in media, somma, minimo e massimo.
+  const strict = (fn) => (...xs) => (!xs.length || xs.some(Number.isNaN) ? NaN : fn(...xs));
   const FX_FUNCS = {
-    avg: (...xs) => { const a = present(xs); return a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN; },
-    sum: (...xs) => { const a = present(xs); return a.length ? a.reduce((s, x) => s + x, 0) : NaN; },
-    min: (...xs) => { const a = present(xs); return a.length ? Math.min(...a) : NaN; },
-    max: (...xs) => { const a = present(xs); return a.length ? Math.max(...a) : NaN; },
-    coalesce: (...xs) => xs.find((x) => !Number.isNaN(Number(x))) ?? NaN, // come in SQL: il primo presente
+    avg: strict((...xs) => xs.reduce((s, x) => s + x, 0) / xs.length),
+    sum: strict((...xs) => xs.reduce((s, x) => s + x, 0)),
+    min: strict(Math.min), max: strict(Math.max),
+    ifnull: (...xs) => xs.find((x) => !Number.isNaN(x)) ?? NaN, // l'unica che passa sopra ai dati mancanti: dà il primo presente
     log10: Math.log10, log: Math.log, sqrt: Math.sqrt, abs: Math.abs, round: Math.round,
   };
   const FX_HELP = {
-    avg: "media dei valori presenti", sum: "somma dei valori presenti", min: "il minore dei valori presenti", max: "il maggiore dei valori presenti",
-    coalesce: "coalesce(x, y, …): il primo valore presente, es. coalesce(v_mal, 0)", log10: "logaritmo in base 10, per i votanti", and: "tutte e due vere", or: "almeno una vera",
+    avg: "media", sum: "somma", min: "il minore", max: "il maggiore",
+    ifnull: "ifnull(x, y, …): il primo valore presente, es. ifnull(v_mal, 0)", log10: "logaritmo in base 10, per i votanti",
+    and: "tutte e due vere", or: "almeno una vera",
   };
-  // Parole al posto di && e ||, che sulla tastiera del telefono sono due pagine più in là.
+  // Parole al posto di && e ||, che sulla tastiera del telefono sono due pagine più in là; "=" da solo è quasi sempre un confronto.
   const FX_WORDS = { and: "&&", or: "||", not: "!" };
   const FX_PRESETS = [
     { label: "Media dei tre voti", fx: "avg(v, v_al, v_mal)" },
@@ -357,18 +358,32 @@
   const FX_EXAMPLES = [
     "avg(v, v_al, v_mal) >= 4.3 and n < 2000",
     "s1 >= 10 and s5 >= 50",
-    "my >= 1 and wl == 0",
+    "ifnull(my, 0) >= 1 and wl == 0",
     "giorni <= 14",
   ];
   class FxError extends Error {}
+  const incomplete = (msg) => Object.assign(new FxError(msg), { incomplete: true });
+  // Vero e falso sono 1 e 0, e un confronto o un and con un dato mancante dà un dato mancante: tutto resta un numero.
+  const bool = (f) => (a, b) => (Number.isNaN(a) || Number.isNaN(b) ? NaN : +f(a, b));
+  const BINARY = [
+    { "||": bool((a, b) => a || b) },
+    { "&&": bool((a, b) => a && b) },
+    { "<": bool((a, b) => a < b), ">": bool((a, b) => a > b), "<=": bool((a, b) => a <= b), ">=": bool((a, b) => a >= b), "==": bool((a, b) => a === b), "!=": bool((a, b) => a !== b) },
+    { "+": (a, b) => a + b, "-": (a, b) => a - b },
+    { "*": (a, b) => a * b, "/": (a, b) => a / b, "%": (a, b) => a % b },
+  ];
   const fxCache = new Map();
-  /** La funzione compilata, o un FxError col motivo; `incomplete` dice se il problema è solo che la formula non è finita. */
+  /**
+   * La formula diventa un albero di funzioni JS scritte qui, senza eval: il testo può nominare solo le variabili
+   * della serie e le funzioni dell'elenco. Dà la funzione, o un FxError col motivo; `incomplete` dice se il
+   * problema è solo che la formula non è finita, cosa normale mentre la si scrive.
+   */
   function compileFx(src) {
     if (fxCache.has(src)) return fxCache.get(src);
     let out;
     try {
       const re = /\s*(?:(\d+(?:\.\d+)?|\.\d+)|([A-Za-z_]\w*)|(\*\*|<=|>=|==|!=|&&|\|\||[-+*\/%()<>,!?:=]))/y;
-      const js = [];
+      const toks = [];
       while (re.lastIndex < src.length) {
         const at = re.lastIndex, m = re.exec(src);
         if (!m) {
@@ -377,28 +392,79 @@
           throw new FxError(`«${rest[0]}» non si può usare`);
         }
         const w = m[2]?.toLowerCase();
-        if (m[1]) js.push(m[1]);
-        else if (m[3]) js.push(m[3] === "=" ? "==" : m[3]); // "=" da solo è quasi sempre un confronto
-        else if (Object.hasOwn(FX_WORDS, w)) js.push(FX_WORDS[w]);
-        else if (Object.hasOwn(FX_FUNCS, w)) js.push(`f.${w}`);
-        else if (Object.hasOwn(FX_VARS, w)) js.push(`x.${w}`);
-        else throw new FxError(`«${m[2]}» non è una variabile né una funzione`);
+        toks.push(m[1] ? { num: Number(m[1]) } : m[3] ? { op: m[3] === "=" ? "==" : m[3] } : Object.hasOwn(FX_WORDS, w) ? { op: FX_WORDS[w] } : { name: w, raw: m[2] });
       }
-      if (!js.length) throw Object.assign(new FxError("formula vuota"), { incomplete: true });
-      out = new Function("x", "f", `"use strict"; return (${js.join(" ")});`); // gli spazi: "-" "-" attaccati sarebbero un decremento
+      let i = 0;
+      const peek = () => toks[i]?.op;
+      const expect = (op) => {
+        if (i >= toks.length) throw incomplete(`manca «${op}»`);
+        if (toks[i].op !== op) throw new FxError(`qui ci vuole «${op}»`);
+        i++;
+      };
+      const ternary = () => {
+        const c = binary(0);
+        if (peek() !== "?") return c;
+        i++;
+        const a = ternary();
+        expect(":");
+        const b = ternary();
+        return (x) => { const k = c(x); return Number.isNaN(k) ? NaN : k ? a(x) : b(x); };
+      };
+      const binary = (level) => {
+        if (level === BINARY.length) return unary();
+        let left = binary(level + 1);
+        while (Object.hasOwn(BINARY[level], peek() ?? "")) {
+          const f = BINARY[level][toks[i++].op], l = left, r = binary(level + 1);
+          left = (x) => f(l(x), r(x));
+        }
+        return left;
+      };
+      const unary = () => {
+        const op = peek();
+        if (op === "-" || op === "+" || op === "!") {
+          i++;
+          const a = unary();
+          return op === "-" ? (x) => -a(x) : op === "+" ? a : (x) => { const v = a(x); return Number.isNaN(v) ? NaN : +!v; };
+        }
+        const base = primary();
+        if (peek() !== "**") return base;
+        i++;
+        const e = unary(); // a destra, come in matematica: 2 ** 3 ** 2 = 2 ** 9
+        return (x) => base(x) ** e(x);
+      };
+      const primary = () => {
+        const t = toks[i++];
+        if (!t) throw incomplete("formula non finita");
+        if ("num" in t) return () => t.num;
+        if (t.op === "(") { const e = ternary(); expect(")"); return e; }
+        if (t.op) throw new FxError(`«${t.op}» non va qui`);
+        if (Object.hasOwn(FX_FUNCS, t.name)) {
+          if (peek() !== "(") throw new FxError(`${t.name} vuole le parentesi: ${t.name}(…)`);
+          i++;
+          const args = [];
+          if (peek() !== ")") {
+            args.push(ternary());
+            while (peek() === ",") { i++; args.push(ternary()); }
+          }
+          expect(")");
+          const f = FX_FUNCS[t.name];
+          return (x) => f(...args.map((a) => a(x)));
+        }
+        if (Object.hasOwn(FX_VARS, t.name)) return (x) => x[t.name];
+        throw new FxError(`«${t.raw}» non è una variabile né una funzione`);
+      };
+      if (!toks.length) throw incomplete("formula vuota");
+      out = ternary();
+      if (i < toks.length) throw new FxError(`«${toks[i].op ?? toks[i].raw ?? toks[i].num}» non va qui`);
     } catch (e) {
-      out = e instanceof FxError ? e : Object.assign(new FxError("formula non finita o con un errore"), { incomplete: true });
+      if (!(e instanceof FxError)) throw e;
+      out = e;
     }
     fxCache.set(src, out);
     return out;
   }
-  /** Il valore di una formula per una serie: un numero (vero e falso valgono 1 e 0) o NaN. */
-  function runFx(fn, r) {
-    try {
-      const y = fn(r.x, FX_FUNCS);
-      return typeof y === "boolean" ? +y : typeof y === "number" ? y : NaN;
-    } catch { return NaN; }
-  }
+  /** Il valore di una formula per una serie: un numero, o NaN se manca un dato. */
+  const runFx = (fn, r) => fn(r.x);
   const nowMs = Date.now();
   for (const r of rows) {
     const p = r.stars.map((s) => s.pct / 100), mean = p.reduce((a, q, i) => a + q * (i + 1), 0);
@@ -830,7 +896,7 @@
   $("fxSort").onclick = () => { const src = checkFx(true); if (!src) return; remember(src); sorts = [{ k: `f:${src}`, desc: true }]; lastClick = { k: `f:${src}`, t: Date.now() }; render(); };
   $("fxFilter").onclick = () => { const src = checkFx(true); if (!src) return; remember(src); fxFilter = src; render(); };
   $("fxOff").onclick = () => { fxFilter = ""; render(); };
-  const chips = [...Object.keys(FX_VARS), "avg(", "min(", "max(", "sum(", "coalesce(", "log10(", " >= ", " <= ", " and ", " or "];
+  const chips = [...Object.keys(FX_VARS), "avg(", "min(", "max(", "sum(", "ifnull(", "log10(", " >= ", " <= ", " and ", " or "];
   $("fxChips").innerHTML = chips.map((t) => { const name = t.trim().replace("(", ""); return `<button type="button" data-t="${esc(t)}" title="${esc(FX_VARS[name] ?? FX_HELP[name] ?? "")}">${esc(t.trim())}</button>`; }).join("");
   $("fxChips").onmousedown = (e) => e.preventDefault(); // il fuoco resta nel campo: sul telefono la tastiera non si chiude
   $("fxChips").onclick = (e) => {
