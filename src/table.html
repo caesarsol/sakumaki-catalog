@@ -278,7 +278,7 @@
   <div class="fx-info" id="fxInfo"></div>
   <div class="fx-chips" id="fxChips"></div>
   <div id="fxActive" hidden>filtro <code></code><button id="fxOff" type="button" title="togli il filtro">✕</button></div>
-  <p class="hint">«Ordina» mette la formula al posto dell'ordinamento, «Filtra» tiene le serie per cui è vera. Voti <code>v v_al v_mal v_bayes</code> sulla scala 1–5, votanti <code>n n_al n_mal</code>, <code>s1</code>…<code>s5</code> la % di ogni stella, <code>sd</code> quanto sono sparse; tocca un nome qui sopra per sapere cos'è. <code>avg sum min max</code> saltano i dati che mancano, <code>oppure(x, 0)</code> li sostituisce; altrove un dato che manca rende falso il confronto e manda la serie in fondo.</p>
+  <p class="hint">«Ordina» mette la formula al posto dell'ordinamento, «Filtra» tiene le serie per cui è vera. Voti <code>v v_al v_mal v_bayes</code> sulla scala 1–5, votanti <code>n n_al n_mal</code>, <code>s1</code>…<code>s5</code> la % di ogni stella, <code>sd</code> quanto sono sparse; tocca un nome qui sopra per sapere cos'è. <code>avg sum min max</code> saltano i dati che mancano, <code>coalesce(x, 0)</code> li sostituisce; altrove un dato che manca rende falso il confronto e manda la serie in fondo.</p>
 </div>
 <div id="paneOrdine" role="tabpanel" hidden>
   <ul id="sortList"></ul>
@@ -338,12 +338,12 @@
     sum: (...xs) => { const a = present(xs); return a.length ? a.reduce((s, x) => s + x, 0) : NaN; },
     min: (...xs) => { const a = present(xs); return a.length ? Math.min(...a) : NaN; },
     max: (...xs) => { const a = present(xs); return a.length ? Math.max(...a) : NaN; },
-    oppure: (x, d) => (Number.isNaN(Number(x)) ? d : x),
+    coalesce: (...xs) => xs.find((x) => !Number.isNaN(Number(x))) ?? NaN, // come in SQL: il primo presente
     log10: Math.log10, log: Math.log, sqrt: Math.sqrt, abs: Math.abs, round: Math.round,
   };
   const FX_HELP = {
     avg: "media dei valori presenti", sum: "somma dei valori presenti", min: "il minore dei valori presenti", max: "il maggiore dei valori presenti",
-    oppure: "oppure(x, d): x, o d se x manca", log10: "logaritmo in base 10, per i votanti", and: "tutte e due vere", or: "almeno una vera",
+    coalesce: "coalesce(x, y, …): il primo valore presente, es. coalesce(v_mal, 0)", log10: "logaritmo in base 10, per i votanti", and: "tutte e due vere", or: "almeno una vera",
   };
   // Parole al posto di && e ||, che sulla tastiera del telefono sono due pagine più in là.
   const FX_WORDS = { and: "&&", or: "||", not: "!" };
@@ -830,7 +830,7 @@
   $("fxSort").onclick = () => { const src = checkFx(true); if (!src) return; remember(src); sorts = [{ k: `f:${src}`, desc: true }]; lastClick = { k: `f:${src}`, t: Date.now() }; render(); };
   $("fxFilter").onclick = () => { const src = checkFx(true); if (!src) return; remember(src); fxFilter = src; render(); };
   $("fxOff").onclick = () => { fxFilter = ""; render(); };
-  const chips = [...Object.keys(FX_VARS), "avg(", "min(", "max(", "sum(", "oppure(", "log10(", " >= ", " <= ", " and ", " or "];
+  const chips = [...Object.keys(FX_VARS), "avg(", "min(", "max(", "sum(", "coalesce(", "log10(", " >= ", " <= ", " and ", " or "];
   $("fxChips").innerHTML = chips.map((t) => { const name = t.trim().replace("(", ""); return `<button type="button" data-t="${esc(t)}" title="${esc(FX_VARS[name] ?? FX_HELP[name] ?? "")}">${esc(t.trim())}</button>`; }).join("");
   $("fxChips").onmousedown = (e) => e.preventDefault(); // il fuoco resta nel campo: sul telefono la tastiera non si chiude
   $("fxChips").onclick = (e) => {
