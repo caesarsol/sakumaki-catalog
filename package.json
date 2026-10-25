@@ -12,6 +12,7 @@
     "watchlist-fields": "bun run src/watchlist-fields.ts",
     "ratings": "bun run src/ratings-external.ts",
     "typecheck": "bun x tsc --noEmit",
+    "test": "bun test",
     "dev": "browser-sync start --server data --files data/index.html --port 8787 --no-open --no-ui --no-notify"
   },
   "devDependencies": {

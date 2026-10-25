@@ -64,10 +64,12 @@ non valido e il run fallisce senza job.
 - Le colonne dei voti (Voto, V Bayes, V AniList, V MAL) hanno dietro al numero una barra sulla scala 1–5, del colore
   della fonte, e sotto in piccolo i votanti; i votanti e le quote per stella si ordinano dal pannello, senza colonna.
 - Le formule (scheda ƒ) ordinano o filtrano con un'espressione sui dati della riga: voti `v v_al v_mal v_bayes`
-  sulla scala 1–5, votanti `n n_al n_mal`, quote `s1`…`s5`, `sd` delle stelle e gli altri in `FX_VARS`. Il testo
-  si legge con un piccolo parser in un albero di funzioni, senza eval: può nominare solo i nomi di
-  `FX_VARS`/`FX_FUNCS`, così una formula incollata non esegue codice. Un dato che manca è NaN e si propaga come
-  NULL in SQL, anche nei confronti, in `and`/`or` e in `avg sum min max`; solo `ifnull(x, 0)` lo sostituisce.
+  sulla scala 1–5, votanti `n n_al n_mal`, quote `s1`…`s5`, `sd` delle stelle e gli altri in `FX_VARS`. Il motore
+  sta in `src/formula.ts`, non nello script della pagina, per provarlo con `bun test` (`src/formula.test.ts`):
+  `page-vendor.ts` lo espone come globale `Formula`. Il testo si legge con un piccolo parser in un albero di
+  funzioni, senza eval: può nominare solo i nomi di `FX_VARS`/`FX_FUNCS`, così una formula incollata non esegue
+  codice. Un dato che manca è NaN e si propaga come NULL in SQL, anche nei confronti, in `and`/`or`/`not` e in
+  `avg sum min max`; solo `ifnull(x, 0)` lo sostituisce. `not` vale per tutto il confronto che segue, come in SQL.
   Senza risultato una serie non passa il filtro e nell'ordinamento va in fondo in entrambi i versi. La colonna
   ƒ, subito dopo il titolo, c'è solo quando una formula ordina.
 - Il dettaglio di una serie (distribuzioni dei voti di tutte le fonti su 5 fasce in un solo grafico, matrice stagioni × paesi, voci AniList/MAL) è un
@@ -85,7 +87,8 @@ non valido e il run fallisce senza job.
 | `catalog.yml` | sabato 02:00 UTC | catalogo per paese via NordVPN, 5 paesi alla volta con i login scaglionati, con le stagioni di ogni serie viste da ogni paese e, dall'Italia, la data dell'ultima puntata → artifact `catalog`, poi lancia `watchlist.yml` e `ratings.yml` |
 | `watchlist.yml` | domenica–venerdì 02:00 UTC | watchlist dell'account, letta dall'Italia via NordVPN, più ultime puntate delle serie in watchlist e voti personali in stelline (`watchlist-extra.json`; il sabato, lanciato da catalog con `full_ratings`, i voti di tutto il catalogo) → artifact `watchlist`, poi lancia `deploy.yml` |
 | `ratings.yml` | a fine catalog | voti AniList e MAL abbinati per id alle serie → artifact `ratings`, poi lancia `deploy.yml` |
-| `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | scarica gli artifact, genera la pagina, pubblica su Pages |
+| `deploy.yml` | push su `main` che tocca `src/**`, o a fine watchlist e ratings | `bun test`, scarica gli artifact, genera la pagina, pubblica su Pages |
+| `test.yml` | push che tocca `src/**`, su qualsiasi ramo | `bun test` e typecheck |
 
 02:00 UTC sono le 04:00 a Roma d'estate e le 03:00 d'inverno: il cron di Actions è in UTC e non segue
 l'ora legale. In pratica però GitHub fa partire i cron con ore di ritardo: nella settimana del 7 ottobre

@@ -1,0 +1,27 @@
+name: test
+
+# I test e il typecheck a ogni push che tocca il codice, su qualsiasi ramo: deploy.yml li ripete prima di
+# pubblicare, ma parte solo da main, e un ramo claude/… va provato prima del merge.
+on:
+  push:
+    paths:
+      - src/**
+      - package.json
+      - bun.lock
+      - tsconfig.json
+      - .github/workflows/test.yml
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run typecheck

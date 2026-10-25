@@ -3,6 +3,7 @@ import { COUNTRIES } from "./countries";
 import { progressBySeries, type Progress } from "./watchlist-progress";
 import type { ExternalRatings } from "./ratings-external";
 import type { Availability, SeasonMatrix } from "./merge";
+import type { FxRow } from "./formula";
 const SITE_BASE = Bun.env.SITE_BASE;
 if (!SITE_BASE) throw new Error("SITE_BASE mancante in .env (vedi .env.example)");
 
@@ -154,7 +155,7 @@ const rows = top.map((s) => ({
   // per il pannello di dettaglio: stagioni per paese e voci AniList/MAL abbinate
   matrix: s.matrix ?? null,
   entries: external?.series[s.id]?.entries ?? [],
-}));
+})) satisfies FxRow[]; // le variabili delle formule si leggono da questi campi: rinominarne uno qui deve fallire il typecheck
 // Le librerie della pagina vengono da node_modules e finiscono dentro la pagina, che resta un file unico:
 // nessun CDN da cui dipendere, versioni fissate in package.json. Un "</script" in una libreria chiuderebbe il tag.
 const vendor = async (path: string) => (await Bun.file(`${import.meta.dir}/../node_modules/${path}`).text()).replace(/<\/(script|style)/gi, "<\\/$1");

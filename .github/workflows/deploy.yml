@@ -32,6 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - run: bun test # le formule della pagina (src/formula.test.ts): rotte, meglio tenere la pagina di ieri
       - run: gh run download "$(gh run list --workflow catalog.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')" --name catalog --dir data # catalogo dell'ultimo run settimanale riuscito
         env:
           GH_TOKEN: ${{ github.token }}

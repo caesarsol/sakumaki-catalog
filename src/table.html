@@ -317,174 +317,18 @@
   const $ = (id) => document.getElementById(id);
   const countries = __COUNTRIES__;
   const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-  /* ---- formule ----------------------------------------------------------------------------
-     Un'espressione scritta nel pannello ƒ e calcolata per ogni serie: ordina (un criterio "f:<testo>" nella
-     pila, come gli altri) o filtra (tiene le serie per cui è vera). Un dato che manca (nessun voto MAL, serie
-     non votata) è NaN e si propaga come in SQL con NULL: in +, nei confronti, in and/or e nelle funzioni,
-     tranne ifnull che lo sostituisce. Senza risultato una serie non passa il filtro e nell'ordinamento va in
-     fondo in entrambi i versi. Scrivere ifnull dove serve è meglio che saltare di nascosto il dato mancante:
-     una media sul solo voto Crunchyroll, con trenta votanti, finirebbe in cima. */
-  const FX_VARS = {
-    v: "voto Crunchyroll, 1–5", v_bayes: "V Bayes, 1–5 (dipende da m nella scheda Voti)", v_al: "voto AniList, 1–5", v_mal: "voto MAL, 1–5",
-    n: "votanti Crunchyroll", n_al: "votanti AniList", n_mal: "votanti MAL",
-    ...Object.fromEntries([1, 2, 3, 4, 5].map((k) => [`s${k}`, `% di votanti Crunchyroll con ${k}★`])),
-    sd: "deviazione standard delle stelle: alta se i voti sono sparsi o divisi fra 1★ e 5★ (0–2)",
-    my: "il tuo voto, 1–5; manca se non l'hai votata", anno: "anno di uscita", ep: "puntate guardabili in Italia", stagioni: "stagioni guardabili in Italia",
-    giorni: "giorni dall'ultima puntata", viste: "puntate viste, per le serie in watchlist", wl: "0 fuori watchlist, 1 dentro, 2 preferita",
-  };
-  // Un dato che manca rende mancante il risultato, come con +: anche in media, somma, minimo e massimo.
-  const strict = (fn) => (...xs) => (!xs.length || xs.some(Number.isNaN) ? NaN : fn(...xs));
-  const FX_FUNCS = {
-    avg: strict((...xs) => xs.reduce((s, x) => s + x, 0) / xs.length),
-    sum: strict((...xs) => xs.reduce((s, x) => s + x, 0)),
-    min: strict(Math.min), max: strict(Math.max),
-    ifnull: (...xs) => xs.find((x) => !Number.isNaN(x)) ?? NaN, // l'unica che passa sopra ai dati mancanti: dà il primo presente
-    log10: Math.log10, log: Math.log, sqrt: Math.sqrt, abs: Math.abs, round: Math.round,
-  };
-  const FX_HELP = {
-    avg: "media", sum: "somma", min: "il minore", max: "il maggiore",
-    ifnull: "ifnull(x, y, …): il primo valore presente, es. ifnull(v_mal, 0)", log10: "logaritmo in base 10, per i votanti",
-    and: "tutte e due vere", or: "almeno una vera",
-  };
-  // Parole al posto di && e ||, che sulla tastiera del telefono sono due pagine più in là; "=" da solo è quasi sempre un confronto.
-  const FX_WORDS = { and: "&&", or: "||", not: "!" };
-  const FX_PRESETS = [
-    { label: "Media dei tre voti", fx: "avg(v, v_al, v_mal)" },
-    { label: "Somma dei tre voti", fx: "v + v_al + v_mal" },
-    { label: "Divisive: tanti 1★ e tanti 5★", fx: "min(s1, s5)" },
-    { label: "Dispersione delle stelle", fx: "sd" },
-    { label: "AniList più generoso di Crunchyroll", fx: "v_al - v" },
-  ];
-  const FX_EXAMPLES = [
-    "avg(v, v_al, v_mal) >= 4.3 and n < 2000",
-    "s1 >= 10 and s5 >= 50",
-    "ifnull(my, 0) >= 1 and wl == 0",
-    "giorni <= 14",
-  ];
-  class FxError extends Error {}
-  const incomplete = (msg) => Object.assign(new FxError(msg), { incomplete: true });
-  // Vero e falso sono 1 e 0, e un confronto o un and con un dato mancante dà un dato mancante: tutto resta un numero.
-  const bool = (f) => (a, b) => (Number.isNaN(a) || Number.isNaN(b) ? NaN : +f(a, b));
-  const BINARY = [
-    { "||": bool((a, b) => a || b) },
-    { "&&": bool((a, b) => a && b) },
-    { "<": bool((a, b) => a < b), ">": bool((a, b) => a > b), "<=": bool((a, b) => a <= b), ">=": bool((a, b) => a >= b), "==": bool((a, b) => a === b), "!=": bool((a, b) => a !== b) },
-    { "+": (a, b) => a + b, "-": (a, b) => a - b },
-    { "*": (a, b) => a * b, "/": (a, b) => a / b, "%": (a, b) => a % b },
-  ];
-  const fxCache = new Map();
-  /**
-   * La formula diventa un albero di funzioni JS scritte qui, senza eval: il testo può nominare solo le variabili
-   * della serie e le funzioni dell'elenco. Dà la funzione, o un FxError col motivo; `incomplete` dice se il
-   * problema è solo che la formula non è finita, cosa normale mentre la si scrive.
-   */
-  function compileFx(src) {
-    if (fxCache.has(src)) return fxCache.get(src);
-    let out;
-    try {
-      const re = /\s*(?:(\d+(?:\.\d+)?|\.\d+)|([A-Za-z_]\w*)|(\*\*|<=|>=|==|!=|&&|\|\||[-+*\/%()<>,!?:=]))/y;
-      const toks = [];
-      while (re.lastIndex < src.length) {
-        const at = re.lastIndex, m = re.exec(src);
-        if (!m) {
-          const rest = src.slice(at).trim();
-          if (!rest) break;
-          throw new FxError(`«${rest[0]}» non si può usare`);
-        }
-        const w = m[2]?.toLowerCase();
-        toks.push(m[1] ? { num: Number(m[1]) } : m[3] ? { op: m[3] === "=" ? "==" : m[3] } : Object.hasOwn(FX_WORDS, w) ? { op: FX_WORDS[w] } : { name: w, raw: m[2] });
-      }
-      let i = 0;
-      const peek = () => toks[i]?.op;
-      const expect = (op) => {
-        if (i >= toks.length) throw incomplete(`manca «${op}»`);
-        if (toks[i].op !== op) throw new FxError(`qui ci vuole «${op}»`);
-        i++;
-      };
-      const ternary = () => {
-        const c = binary(0);
-        if (peek() !== "?") return c;
-        i++;
-        const a = ternary();
-        expect(":");
-        const b = ternary();
-        return (x) => { const k = c(x); return Number.isNaN(k) ? NaN : k ? a(x) : b(x); };
-      };
-      const binary = (level) => {
-        if (level === BINARY.length) return unary();
-        let left = binary(level + 1);
-        while (Object.hasOwn(BINARY[level], peek() ?? "")) {
-          const f = BINARY[level][toks[i++].op], l = left, r = binary(level + 1);
-          left = (x) => f(l(x), r(x));
-        }
-        return left;
-      };
-      const unary = () => {
-        const op = peek();
-        if (op === "-" || op === "+" || op === "!") {
-          i++;
-          const a = unary();
-          return op === "-" ? (x) => -a(x) : op === "+" ? a : (x) => { const v = a(x); return Number.isNaN(v) ? NaN : +!v; };
-        }
-        const base = primary();
-        if (peek() !== "**") return base;
-        i++;
-        const e = unary(); // a destra, come in matematica: 2 ** 3 ** 2 = 2 ** 9
-        return (x) => base(x) ** e(x);
-      };
-      const primary = () => {
-        const t = toks[i++];
-        if (!t) throw incomplete("formula non finita");
-        if ("num" in t) return () => t.num;
-        if (t.op === "(") { const e = ternary(); expect(")"); return e; }
-        if (t.op) throw new FxError(`«${t.op}» non va qui`);
-        if (Object.hasOwn(FX_FUNCS, t.name)) {
-          if (peek() !== "(") throw new FxError(`${t.name} vuole le parentesi: ${t.name}(…)`);
-          i++;
-          const args = [];
-          if (peek() !== ")") {
-            args.push(ternary());
-            while (peek() === ",") { i++; args.push(ternary()); }
-          }
-          expect(")");
-          const f = FX_FUNCS[t.name];
-          return (x) => f(...args.map((a) => a(x)));
-        }
-        if (Object.hasOwn(FX_VARS, t.name)) return (x) => x[t.name];
-        throw new FxError(`«${t.raw}» non è una variabile né una funzione`);
-      };
-      if (!toks.length) throw incomplete("formula vuota");
-      out = ternary();
-      if (i < toks.length) throw new FxError(`«${toks[i].op ?? toks[i].raw ?? toks[i].num}» non va qui`);
-    } catch (e) {
-      if (!(e instanceof FxError)) throw e;
-      out = e;
-    }
-    fxCache.set(src, out);
-    return out;
-  }
+  /* ---- formule: il motore sta in formula.ts, provato con bun test, e arriva impacchettato con le librerie ---- */
+  const { FX_VARS, FX_HELP, FX_PRESETS, FX_EXAMPLES, compileFx, fxVars, digitsOf, compareFx } = Formula;
   /** Il valore di una formula per una serie: un numero, o NaN se manca un dato. */
   const runFx = (fn, r) => fn(r.x);
   const nowMs = Date.now();
   for (const r of rows) {
-    const p = r.stars.map((s) => s.pct / 100), mean = p.reduce((a, q, i) => a + q * (i + 1), 0);
-    r.x = {
-      v: r.votes ? r.rating : NaN, v_bayes: NaN, // v_bayes lo aggiorna render, segue m
-      v_al: r.al >= 0 ? r.al : NaN, v_mal: r.mal >= 0 ? r.mal : NaN,
-      n: r.votes, n_al: r.al >= 0 ? r.al_votes : NaN, n_mal: r.mal >= 0 ? r.mal_votes : NaN,
-      ...Object.fromEntries(r.stars.map((s, i) => [`s${i + 1}`, r.votes ? s.pct : NaN])),
-      sd: r.votes ? Math.sqrt(p.reduce((a, q, i) => a + q * (i + 1 - mean) ** 2, 0)) : NaN,
-      my: r.my_rating || NaN, anno: r.year ?? NaN, ep: r.episodes, stagioni: r.seasons,
-      giorni: r.latest ? Math.floor((nowMs - Date.parse(r.latest)) / 864e5) : NaN,
-      viste: r.in_watchlist ? r.ep_done : NaN, wl: r.wl_rank,
-    };
+    r.x = fxVars(r, nowMs);
     r.f = {}; // formula -> valore, ricalcolato a ogni render per le formule in uso
   }
   let fxFilter = ""; // la formula che filtra, "" se nessuna
   let shownFx = ""; // la formula della colonna ƒ: la prima che ordina
   let fxDigits = 0;
-  /** I decimali che servono, fino a 3: uguali per tutta la colonna, così i numeri si incolonnano, e nessuno per i conteggi. */
-  const digitsOf = (ys) => Math.max(0, ...ys.filter(Number.isFinite).map((y) => [0, 1, 2].find((d) => Math.abs(y * 10 ** d - Math.round(y * 10 ** d)) < 1e-6) ?? 3));
 
   const headRow = document.querySelector("thead tr");
   for (const c of countries) {
@@ -602,8 +446,7 @@
   const compare = (a, b) => {
     for (const { k, desc } of sorts) {
       const x = value(a, k), y = value(b, k);
-      const nx = Number.isNaN(x), ny = Number.isNaN(y);
-      if (nx || ny) { if (nx !== ny) return nx ? 1 : -1; continue; } // il dato mancante di una formula va in fondo in entrambi i versi
+      if (k.startsWith("f:")) { const c = compareFx(x, y, desc); if (c) return c; continue; } // il dato mancante va in fondo in entrambi i versi
       const c = typeof x === "number" || typeof x === "boolean" ? x - y : String(x).localeCompare(String(y));
       if (c) return desc ? -c : c;
     }
