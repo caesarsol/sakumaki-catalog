@@ -195,8 +195,25 @@
   #paneOrdine .row { display: flex; gap: 6px; }
   #paneOrdine select { flex: 1; font: inherit; font-size: .85em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
   #paneVoti { max-width: 26rem; }
-  #paneOrdine .hint, #paneVoti .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
+  #paneOrdine .hint, #paneVoti .hint, #paneFx .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
   .sortable-ghost { opacity: .4; }
+  /* Formule: la colonna ƒ c'è solo quando una formula ordina, ed è subito dopo il titolo, dove sul telefono si vede senza scorrere. */
+  table.nofx .fcol { display: none; }
+  #paneFx { max-width: 34rem; }
+  #paneFx .row { display: flex; gap: 6px; }
+  #fx { flex: 1; min-width: 0; height: var(--h); box-sizing: border-box; padding: 0 8px; font: .9rem ui-monospace, monospace; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  #fx.bad { border-color: var(--out); }
+  #paneFx button { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--fg); padding: 2px 8px; }
+  #paneFx button:disabled { opacity: .4; cursor: default; }
+  /* I nomi da toccare invece che da scrivere: su una riga sola che scorre di lato, così non spingono giù il resto. */
+  .fx-chips { display: flex; gap: 4px; overflow-x: auto; margin-top: 6px; padding-bottom: 2px; }
+  #paneFx .fx-chips button { flex: none; font-family: ui-monospace, monospace; padding: 2px 6px; }
+  .fx-err { margin-top: 4px; font-size: .78rem; color: var(--out); }
+  .fx-info { margin-top: 4px; font-size: .78rem; color: var(--muted); }
+  .fx-err:empty, .fx-info:empty { display: none; }
+  #fxActive { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: .85em; }
+  #fxActive[hidden] { display: none; }
+  #fxActive code { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
 
   /* Mobile: è lo schermo che conta di più. Campi in colonna a tutta larghezza — altrimenti la
      ricerca e i multi-select finiscono larghi diversi — e pannello ancorato in basso allo schermo,
@@ -213,13 +230,14 @@
     .seg label { flex: 1; }
     .seg span { width: 100%; justify-content: center; }
     .tab { padding: 6px 7px; }
+    .tab .long { display: none; } /* sul telefono la scheda delle formule è solo ƒ: con la parola intera le schede non stanno su una riga */
     #count { font-size: .78rem; }
   }
   /* Safari su iOS ingrandisce la pagina quando va a fuoco un campo con testo sotto i 16px, compreso
      l'input nascosto dentro Tom Select: a 16px non lo fa più. Solo su iOS (è l'unico a fare lo zoom),
      e non con maximum-scale nel viewport, che su Android toglierebbe anche lo zoom con due dita. */
   @supports (-webkit-touch-callout: none) {
-    .filters input, .ts-control > input, #paneOrdine select { font-size: 16px !important; }
+    .filters input, .ts-control > input, #paneOrdine select, #fx { font-size: 16px !important; }
   }
 </style>
 </head>
@@ -229,6 +247,7 @@
 <div class="tabs" role="tablist">
   <button id="tabFiltri" class="tab on" type="button" role="tab" aria-selected="true" aria-controls="paneFiltri">Filtri</button>
   <button id="tabOrdine" class="tab" type="button" role="tab" aria-selected="false" aria-controls="paneOrdine">Ordinamento <span id="sortCount"></span></button>
+  <button id="tabFx" class="tab" type="button" role="tab" aria-selected="false" aria-controls="paneFx" title="Formule">ƒ<span class="long"> Formule</span> <span id="fxCount"></span></button>
   <button id="tabVoti" class="tab" type="button" role="tab" aria-selected="false" aria-controls="paneVoti">Voti</button>
   <span id="count"></span>
 </div>
@@ -248,6 +267,19 @@
   <span class="group" title="voti di fiducia della media bayesiana: V Bayes = min(voto, (v·voto + m·media catalogo)/(v+m))">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
   <p class="hint">V Bayes tira il voto verso la media del catalogo come se ogni serie avesse altri m voti nella media, e solo verso il basso: con pochi votanti una serie non sale in cima. Più m è alto, più servono voti per contare.</p>
 </div>
+<div id="paneFx" role="tabpanel" hidden>
+  <div class="row">
+    <input id="fx" type="text" list="fxList" placeholder="es. avg(v, v_al, v_mal)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="formula">
+    <button id="fxSort" type="button" disabled>Ordina</button>
+    <button id="fxFilter" type="button" disabled>Filtra</button>
+  </div>
+  <datalist id="fxList"></datalist>
+  <div class="fx-err" id="fxErr"></div>
+  <div class="fx-info" id="fxInfo"></div>
+  <div class="fx-chips" id="fxChips"></div>
+  <div id="fxActive" hidden>filtro <code></code><button id="fxOff" type="button" title="togli il filtro">✕</button></div>
+  <p class="hint">«Ordina» mette la formula al posto dell'ordinamento, «Filtra» tiene le serie per cui è vera. Voti <code>v v_al v_mal v_bayes</code> sulla scala 1–5, votanti <code>n n_al n_mal</code>, <code>s1</code>…<code>s5</code> la % di ogni stella, <code>sd</code> quanto sono sparse; tocca un nome qui sopra per sapere cos'è. <code>avg sum min max</code> saltano i dati che mancano, <code>oppure(x, 0)</code> li sostituisce; altrove un dato che manca rende falso il confronto e manda la serie in fondo.</p>
+</div>
 <div id="paneOrdine" role="tabpanel" hidden>
   <ul id="sortList"></ul>
   <div class="row">
@@ -259,9 +291,10 @@
 </div>
 </header>
 <div class="scroller">
-<table>
+<table class="nofx">
   <thead><tr>
     <th data-k="title"><div class="peek"><div class="full">Titolo</div></div></th>
+    <th class="fcol" data-num>ƒ</th>
     <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella; sotto, i votanti">Voto</th>
     <th data-k="weighted" data-num title="media bayesiana che può solo abbassare il voto: min(voto, (v·voto + m·media catalogo)/(v+m)), m regolabile nei filtri; sotto, i votanti">V Bayes</th>
     <th data-k="al" data-num title="voto su AniList portato sulla scala 0–5 (centesimi / 20): media delle stagioni e dei film abbinati, pesata sui votanti; sotto, i votanti. ✗ nessun abbinamento">V AniList</th>
@@ -284,6 +317,109 @@
   const $ = (id) => document.getElementById(id);
   const countries = __COUNTRIES__;
   const flag = (iso2) => String.fromCodePoint(...[...iso2].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+  /* ---- formule ----------------------------------------------------------------------------
+     Un'espressione scritta nel pannello ƒ e calcolata per ogni serie: ordina (un criterio "f:<testo>" nella
+     pila, come gli altri) o filtra (tiene le serie per cui è vera). Il testo si scompone in pezzi e passa solo
+     se ognuno è un numero, un operatore o un nome dell'elenco: niente stringhe, punti o parentesi quadre,
+     quindi la funzione compilata non arriva ad altro che alle variabili della serie e alle funzioni qui sotto.
+     Un dato che manca (nessun voto MAL, serie non votata) è NaN: si propaga nei conti, rende falsi i
+     confronti e nell'ordinamento va in fondo in entrambi i versi. */
+  const FX_VARS = {
+    v: "voto Crunchyroll, 1–5", v_bayes: "V Bayes, 1–5 (dipende da m nella scheda Voti)", v_al: "voto AniList, 1–5", v_mal: "voto MAL, 1–5",
+    n: "votanti Crunchyroll", n_al: "votanti AniList", n_mal: "votanti MAL",
+    ...Object.fromEntries([1, 2, 3, 4, 5].map((k) => [`s${k}`, `% di votanti Crunchyroll con ${k}★`])),
+    sd: "deviazione standard delle stelle: alta se i voti sono sparsi o divisi fra 1★ e 5★ (0–2)",
+    my: "il tuo voto, 1–5; manca se non l'hai votata", anno: "anno di uscita", ep: "puntate guardabili in Italia", stagioni: "stagioni guardabili in Italia",
+    giorni: "giorni dall'ultima puntata", viste: "puntate viste, per le serie in watchlist", wl: "0 fuori watchlist, 1 dentro, 2 preferita",
+  };
+  const present = (xs) => xs.map(Number).filter((x) => !Number.isNaN(x));
+  const FX_FUNCS = {
+    avg: (...xs) => { const a = present(xs); return a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN; },
+    sum: (...xs) => { const a = present(xs); return a.length ? a.reduce((s, x) => s + x, 0) : NaN; },
+    min: (...xs) => { const a = present(xs); return a.length ? Math.min(...a) : NaN; },
+    max: (...xs) => { const a = present(xs); return a.length ? Math.max(...a) : NaN; },
+    oppure: (x, d) => (Number.isNaN(Number(x)) ? d : x),
+    log10: Math.log10, log: Math.log, sqrt: Math.sqrt, abs: Math.abs, round: Math.round,
+  };
+  const FX_HELP = {
+    avg: "media dei valori presenti", sum: "somma dei valori presenti", min: "il minore dei valori presenti", max: "il maggiore dei valori presenti",
+    oppure: "oppure(x, d): x, o d se x manca", log10: "logaritmo in base 10, per i votanti", and: "tutte e due vere", or: "almeno una vera",
+  };
+  // Parole al posto di && e ||, che sulla tastiera del telefono sono due pagine più in là.
+  const FX_WORDS = { and: "&&", or: "||", not: "!" };
+  const FX_PRESETS = [
+    { label: "Media dei tre voti", fx: "avg(v, v_al, v_mal)" },
+    { label: "Somma dei tre voti", fx: "v + v_al + v_mal" },
+    { label: "Divisive: tanti 1★ e tanti 5★", fx: "min(s1, s5)" },
+    { label: "Dispersione delle stelle", fx: "sd" },
+    { label: "AniList più generoso di Crunchyroll", fx: "v_al - v" },
+  ];
+  const FX_EXAMPLES = [
+    "avg(v, v_al, v_mal) >= 4.3 and n < 2000",
+    "s1 >= 10 and s5 >= 50",
+    "my >= 1 and wl == 0",
+    "giorni <= 14",
+  ];
+  class FxError extends Error {}
+  const fxCache = new Map();
+  /** La funzione compilata, o un FxError col motivo; `incomplete` dice se il problema è solo che la formula non è finita. */
+  function compileFx(src) {
+    if (fxCache.has(src)) return fxCache.get(src);
+    let out;
+    try {
+      const re = /\s*(?:(\d+(?:\.\d+)?|\.\d+)|([A-Za-z_]\w*)|(\*\*|<=|>=|==|!=|&&|\|\||[-+*\/%()<>,!?:=]))/y;
+      const js = [];
+      while (re.lastIndex < src.length) {
+        const at = re.lastIndex, m = re.exec(src);
+        if (!m) {
+          const rest = src.slice(at).trim();
+          if (!rest) break;
+          throw new FxError(`«${rest[0]}» non si può usare`);
+        }
+        const w = m[2]?.toLowerCase();
+        if (m[1]) js.push(m[1]);
+        else if (m[3]) js.push(m[3] === "=" ? "==" : m[3]); // "=" da solo è quasi sempre un confronto
+        else if (Object.hasOwn(FX_WORDS, w)) js.push(FX_WORDS[w]);
+        else if (Object.hasOwn(FX_FUNCS, w)) js.push(`f.${w}`);
+        else if (Object.hasOwn(FX_VARS, w)) js.push(`x.${w}`);
+        else throw new FxError(`«${m[2]}» non è una variabile né una funzione`);
+      }
+      if (!js.length) throw Object.assign(new FxError("formula vuota"), { incomplete: true });
+      out = new Function("x", "f", `"use strict"; return (${js.join(" ")});`); // gli spazi: "-" "-" attaccati sarebbero un decremento
+    } catch (e) {
+      out = e instanceof FxError ? e : Object.assign(new FxError("formula non finita o con un errore"), { incomplete: true });
+    }
+    fxCache.set(src, out);
+    return out;
+  }
+  /** Il valore di una formula per una serie: un numero (vero e falso valgono 1 e 0) o NaN. */
+  function runFx(fn, r) {
+    try {
+      const y = fn(r.x, FX_FUNCS);
+      return typeof y === "boolean" ? +y : typeof y === "number" ? y : NaN;
+    } catch { return NaN; }
+  }
+  const nowMs = Date.now();
+  for (const r of rows) {
+    const p = r.stars.map((s) => s.pct / 100), mean = p.reduce((a, q, i) => a + q * (i + 1), 0);
+    r.x = {
+      v: r.votes ? r.rating : NaN, v_bayes: NaN, // v_bayes lo aggiorna render, segue m
+      v_al: r.al >= 0 ? r.al : NaN, v_mal: r.mal >= 0 ? r.mal : NaN,
+      n: r.votes, n_al: r.al >= 0 ? r.al_votes : NaN, n_mal: r.mal >= 0 ? r.mal_votes : NaN,
+      ...Object.fromEntries(r.stars.map((s, i) => [`s${i + 1}`, r.votes ? s.pct : NaN])),
+      sd: r.votes ? Math.sqrt(p.reduce((a, q, i) => a + q * (i + 1 - mean) ** 2, 0)) : NaN,
+      my: r.my_rating || NaN, anno: r.year ?? NaN, ep: r.episodes, stagioni: r.seasons,
+      giorni: r.latest ? Math.floor((nowMs - Date.parse(r.latest)) / 864e5) : NaN,
+      viste: r.in_watchlist ? r.ep_done : NaN, wl: r.wl_rank,
+    };
+    r.f = {}; // formula -> valore, ricalcolato a ogni render per le formule in uso
+  }
+  let fxFilter = ""; // la formula che filtra, "" se nessuna
+  let shownFx = ""; // la formula della colonna ƒ: la prima che ordina
+  let fxDigits = 0;
+  /** I decimali che servono, fino a 3: uguali per tutta la colonna, così i numeri si incolonnano, e nessuno per i conteggi. */
+  const digitsOf = (ys) => Math.max(0, ...ys.filter(Number.isFinite).map((y) => [0, 1, 2].find((d) => Math.abs(y * 10 ** d - Math.round(y * 10 ** d)) < 1e-6) ?? 3));
+
   const headRow = document.querySelector("thead tr");
   for (const c of countries) {
     const th = document.createElement("th");
@@ -292,7 +428,8 @@
     headRow.append(th);
   }
   const ths = [...document.querySelectorAll("thead th")];
-  const columns = ths.map((th) => ({ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }))
+  const fxTh = document.querySelector("th.fcol");
+  const columns = ths.filter((th) => th !== fxTh).map((th) => ({ k: th.dataset.k, label: th.dataset.label ?? th.textContent.trim(), num: "num" in th.dataset }))
     // Criteri senza colonna, solo dal pannello: i votanti stanno piccoli sotto i voti, watchlist e voto personale
     // come simboli nel titolo, e la quota di ogni stella (`s:5` … `s:1`) nel grafico del dettaglio.
     .concat([
@@ -302,8 +439,9 @@
       ...[5, 4, 3, 2, 1].map((n) => ({ k: `s:${n}`, label: `Distribuzione ${n}★`, num: true })),
       { k: "wl_rank", label: "Watchlist (preferite prima)", num: true },
       { k: "my_rating", label: "Il mio voto", num: true },
+      ...FX_PRESETS.map((p) => ({ k: `f:${p.fx}`, label: `ƒ ${p.label}`, num: true })),
     ]);
-  const labelOf = (k) => columns.find((c) => c.k === k)?.label ?? k;
+  const labelOf = (k) => columns.find((c) => c.k === k)?.label ?? (k.startsWith("f:") ? `ƒ ${k.slice(2)}` : k);
 
   const fmt = new Intl.NumberFormat("it-IT");
   const episodeLabel = (r) => (r.wl_season < 0 ? "" : `S${r.wl_season}${r.wl_episode >= 0 ? `·E${r.wl_episode}` : ""}`);
@@ -393,10 +531,13 @@
   const value = (r, k) =>
     k.startsWith("c:") ? r.countries.includes(k.slice(2)) :
     k.startsWith("s:") ? r.stars[Number(k.slice(2)) - 1].pct :
+    k.startsWith("f:") ? r.f[k.slice(2)] ?? NaN :
     r[k] ?? "";
   const compare = (a, b) => {
     for (const { k, desc } of sorts) {
       const x = value(a, k), y = value(b, k);
+      const nx = Number.isNaN(x), ny = Number.isNaN(y);
+      if (nx || ny) { if (nx !== ny) return nx ? 1 : -1; continue; } // il dato mancante di una formula va in fondo in entrambi i versi
       const c = typeof x === "number" || typeof x === "boolean" ? x - y : String(x).localeCompare(String(y));
       if (c) return desc ? -c : c;
     }
@@ -409,7 +550,7 @@
   const CYCLE_MS = 5000;
   let lastClick = { k: null, t: 0 };
   function clickSort(k) {
-    const natural = columns.find((c) => c.k === k)?.num ?? false;
+    const natural = columns.find((c) => c.k === k)?.num ?? k.startsWith("f:");
     const i = sorts.findIndex((s) => s.k === k);
     const now = Date.now();
     const recent = lastClick.k === k && now - lastClick.t < CYCLE_MS;
@@ -443,13 +584,32 @@
     const wl = watchlist();
     const cIn = fCountries.in, cOut = fCountries.out, gIn = fGenres.in, gOut = fGenres.out;
     const m = Number($("m").value) || 0, C = __C__; // media del catalogo intero, calcolata da table.ts
-    for (const r of rows) r.weighted = Math.min(r.rating, (r.votes * r.rating + m * C) / (r.votes + m)); // solo verso il basso, come in table.ts
+    for (const r of rows) r.x.v_bayes = r.weighted = Math.min(r.rating, (r.votes * r.rating + m * C) / (r.votes + m)); // solo verso il basso, come in table.ts
+    const fxSorts = sorts.filter((s) => s.k.startsWith("f:")).map((s) => s.k.slice(2));
+    for (const src of fxSorts) {
+      const fn = compileFx(src);
+      for (const r of rows) r.f[src] = fn instanceof Error ? NaN : runFx(fn, r);
+    }
+    const fxf = fxFilter && compileFx(fxFilter);
     visible = rows.filter((r) =>
       (!q || r.title.toLowerCase().includes(q)) &&
       cIn.every((c) => r.countries.includes(c)) && !cOut.some((c) => r.countries.includes(c)) &&
       gIn.every((g) => r.genres.includes(g)) && !gOut.some((g) => r.genres.includes(g)) &&
-      (wl !== "in" || r.in_watchlist) && (wl !== "fav" || r.wl_fav) && (wl !== "out" || !r.in_watchlist));
+      (wl !== "in" || r.in_watchlist) && (wl !== "fav" || r.wl_fav) && (wl !== "out" || !r.in_watchlist) &&
+      (!fxf || (!(fxf instanceof Error) && !!runFx(fxf, r)))); // NaN è falso: senza il dato la serie non passa
     visible.sort(compare);
+    // La colonna ƒ mostra la prima formula della pila; cambiando formula la riga metro va rifatta, i valori sono altri.
+    if (shownFx !== (fxSorts[0] ?? "")) {
+      shownFx = fxSorts[0] ?? "";
+      fxDigits = digitsOf(rows.map((r) => r.f[shownFx]));
+      sizer = "";
+    }
+    document.querySelector(".scroller table").classList.toggle("nofx", !shownFx);
+    fxTh.dataset.k = shownFx && `f:${shownFx}`;
+    fxTh.title = shownFx && `ƒ ${labelOf(`f:${shownFx}`).slice(2)}${labelOf(`f:${shownFx}`).slice(2) !== shownFx ? ` = ${shownFx}` : ""}`;
+    $("fxCount").textContent = fxFilter ? "(1)" : "";
+    $("fxActive").hidden = !fxFilter;
+    $("fxActive").querySelector("code").textContent = fxFilter;
     if (!sizer) sizer = sizerRow();
     virtualizer.setOptions({ ...virtualizer.options, count: visible.length });
     virtualizer._willUpdate();
@@ -467,6 +627,10 @@
   /** Una funzione per colonna, nell'ordine delle intestazioni. */
   const cells = [
     (r) => `<td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}"><span class="tt">${esc(r.title)}</span>${marks(r)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>`,
+    (r) => {
+      const y = shownFx ? r.f[shownFx] ?? NaN : NaN;
+      return Number.isNaN(y) ? `<td class="num fcol nomatch">–</td>` : `<td class="num fcol">${fxDigits ? y.toFixed(fxDigits) : fmt.format(y)}</td>`;
+    },
     (r) => scoreCell(r.rating, 3, r.votes, "own"),
     (r) => scoreCell(r.weighted, 3, r.votes, "own"),
     (r) => extCell(r.al, r.al_raw, 100, r.al_votes, r.al_n, "AniList", "al"),
@@ -607,7 +771,7 @@
   $("sheetBack").onclick = closeSheet;
   $("sheet").addEventListener("click", (e) => { if (e.target.closest(".close")) closeSheet(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
-  const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")], Voti: [$("tabVoti"), $("paneVoti")] };
+  const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")], Fx: [$("tabFx"), $("paneFx")], Voti: [$("tabVoti"), $("paneVoti")] };
   for (const [nome, [tab]] of Object.entries(schede)) tab.onclick = () => {
     for (const [altro, [t, pannello]] of Object.entries(schede)) {
       const attiva = altro === nome;
@@ -634,6 +798,52 @@
     sorts = [...$("sortList").children].map((li) => sorts.find((s) => s.k === li.dataset.k)).filter(Boolean);
     render();
   } });
+
+  /* ---- pannello delle formule ---- */
+  const fxInput = $("fx");
+  const FX_RECENT = "sakumaki.fx";
+  const recent = () => { try { return JSON.parse(localStorage.getItem(FX_RECENT)) ?? []; } catch { return []; } };
+  /** Le ultime formule usate, prima degli esempi, nei suggerimenti del campo: solo in questo browser, è una comodità. */
+  function remember(src) {
+    const list = [src, ...recent().filter((x) => x !== src)].slice(0, 12);
+    try { localStorage.setItem(FX_RECENT, JSON.stringify(list)); } catch {}
+    fillSuggestions();
+  }
+  function fillSuggestions() {
+    const all = [...new Set([...recent(), ...FX_PRESETS.map((p) => p.fx), ...FX_EXAMPLES])];
+    $("fxList").innerHTML = all.map((x) => `<option value="${esc(x)}"></option>`).join("");
+  }
+  /** La formula nel campo se è valida, altrimenti "". `strict` mostra anche l'errore di una formula non finita, che mentre si scrive è normale. */
+  function checkFx(strict) {
+    const src = fxInput.value.trim();
+    const fn = src ? compileFx(src) : null;
+    const err = fn instanceof Error && (strict || !fn.incomplete) ? fn.message : "";
+    $("fxErr").textContent = err;
+    fxInput.classList.toggle("bad", !!err);
+    $("fxSort").disabled = $("fxFilter").disabled = !fn || fn instanceof Error;
+    return fn && !(fn instanceof Error) ? src : "";
+  }
+  fxInput.oninput = () => checkFx(false);
+  fxInput.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); if (checkFx(true)) $("fxSort").click(); } };
+  // Ordina come il clic su un'intestazione: sostituisce la pila, e i criteri di spareggio si aggiungono dalla scheda Ordinamento.
+  // Conta come un clic sulla colonna ƒ: toccarne l'intestazione subito dopo inverte il verso invece di toglierla.
+  $("fxSort").onclick = () => { const src = checkFx(true); if (!src) return; remember(src); sorts = [{ k: `f:${src}`, desc: true }]; lastClick = { k: `f:${src}`, t: Date.now() }; render(); };
+  $("fxFilter").onclick = () => { const src = checkFx(true); if (!src) return; remember(src); fxFilter = src; render(); };
+  $("fxOff").onclick = () => { fxFilter = ""; render(); };
+  const chips = [...Object.keys(FX_VARS), "avg(", "min(", "max(", "sum(", "oppure(", "log10(", " >= ", " <= ", " and ", " or "];
+  $("fxChips").innerHTML = chips.map((t) => { const name = t.trim().replace("(", ""); return `<button type="button" data-t="${esc(t)}" title="${esc(FX_VARS[name] ?? FX_HELP[name] ?? "")}">${esc(t.trim())}</button>`; }).join("");
+  $("fxChips").onmousedown = (e) => e.preventDefault(); // il fuoco resta nel campo: sul telefono la tastiera non si chiude
+  $("fxChips").onclick = (e) => {
+    const b = e.target.closest("button[data-t]");
+    if (!b) return;
+    const a = fxInput.selectionStart ?? fxInput.value.length, z = fxInput.selectionEnd ?? a;
+    fxInput.setRangeText(b.dataset.t, a, z, "end");
+    fxInput.focus();
+    const name = b.dataset.t.trim().replace("(", "");
+    $("fxInfo").textContent = FX_VARS[name] || FX_HELP[name] ? `${name}: ${FX_VARS[name] ?? FX_HELP[name]}` : "";
+    checkFx(false);
+  };
+  fillSuggestions();
 
   for (const id of ["q", "m"]) $(id).oninput = render;
   for (const radio of document.querySelectorAll("input[name=wl]")) radio.onchange = render;
