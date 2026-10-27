@@ -56,6 +56,8 @@ non valido e il run fallisce senza job.
 ## Convenzioni
 
 - Commenti e messaggi di commit in italiano. I commenti dicono il perché, non il cosa.
+- Un ramo entra in `main` con un merge `--no-ff`, mai con un fast-forward: il commit di merge tiene insieme
+  i commit della modifica, che nella storia si riconosce e si annulla in un colpo solo (`git revert -m 1`).
 - Le librerie della pagina (Tom Select, SortableJS) sono dipendenze npm con versione fissata: `table.ts` ne
   copia i file da `node_modules` dentro la pagina, che resta un file unico e non chiama nessun CDN.
 - La tabella è virtualizzata (TanStack Virtual, `page-vendor.ts` impacchettato da `table.ts`): nella pagina
