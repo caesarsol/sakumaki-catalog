@@ -62,10 +62,14 @@ non valido e il run fallisce senza job.
 - La tabella è virtualizzata (TanStack Virtual, `page-vendor.ts` impacchettato da `table.ts`): nella pagina
   ci sono solo le righe visibili più un margine. Le righe devono restare tutte alte uguali, `ROW_H` nello
   script e l'altezza di `th, tbody td` nel CSS; una riga "metro" invisibile tiene ferme le larghezze.
-- Le colonne dei voti (Voto, V Bayes, V AniList, V MAL) hanno dietro al numero una barra sulla scala 1–5, del colore
-  della fonte, e sotto in piccolo i votanti; i votanti e le quote per stella si ordinano dal pannello, senza colonna.
+- I voti sono tutti in decimi: le stelline di Crunchyroll per 2, AniList (centesimi) diviso 10, MAL com'è. È la scala
+  in cui si leggono MAL e AniList, e un 8,6 si confronta col sito senza conti; le stelline restano solo nelle
+  distribuzioni e nel voto personale (`my`, 1–5).
+- Le colonne dei voti (V Crunchy, V Crunchy Bayes, V AniList, V MAL) hanno dietro al numero una barra da 2 (una stella)
+  a 10, del colore della fonte (arancio Crunchyroll, azzurro AniList, blu scuro MAL, i `--src-*` del CSS), e sotto in
+  piccolo i votanti; i votanti e le quote per stella si ordinano dal pannello, senza colonna.
 - Le formule (scheda ƒ) ordinano o filtrano con un'espressione sui dati della riga: voti `v v_al v_mal v_bayes`
-  sulla scala 1–5, votanti `n n_al n_mal`, quote `s1`…`s5`, `sd` delle stelle e gli altri in `FX_VARS`. Il motore
+  in decimi, votanti `n n_al n_mal`, quote `s1`…`s5`, `sd` delle stelle e gli altri in `FX_VARS`. Il motore
   sta in `src/formula.ts`, non nello script della pagina, per provarlo con `bun test` (`src/formula.test.ts`):
   `page-vendor.ts` lo espone come globale `Formula`. Il testo si legge con un piccolo parser in un albero di
   funzioni, senza eval: può nominare solo i nomi di `FX_VARS`/`FX_FUNCS`, così una formula incollata non esegue
@@ -74,7 +78,9 @@ non valido e il run fallisce senza job.
   Senza risultato una serie non passa il filtro e nell'ordinamento va in fondo in entrambi i versi. La colonna
   ƒ, subito dopo il titolo, c'è solo quando una formula ordina.
 - Il dettaglio di una serie (distribuzioni dei voti di tutte le fonti su 5 fasce in un solo grafico, matrice stagioni × paesi, voci AniList/MAL) è un
-  pannello che si apre dal basso toccando la riga, non una riga che si allarga: con la virtualizzazione le
+  pannello che si apre dal basso toccando la riga (il titolo no: è il link alla serie).
+  Il grafico è la prima riga della tabella delle distribuzioni, disegnato in pixel sulla larghezza delle cinque
+  colonne delle stelle, così ogni punto sta sopra il suo numero. Non una riga che si allarga perché con la virtualizzazione le
   righe devono restare alte uguali, e sul telefono una matrice dentro una riga non si leggerebbe.
 - `data/` è gitignored: è tutta roba generata o scaricata.
 - Gli host dell'API e del sito stanno nei secret, non nel repo: i log di Actions sono pubblici.

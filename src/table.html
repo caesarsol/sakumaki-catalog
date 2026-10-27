@@ -13,12 +13,15 @@
     --accent: #a4500c; --accent-weak: #a4500c1a; /* arancio scuro */
     --in: #1a7f37; --out: #c0392b; /* incluso / escluso nei filtri a tre stati */
     --h: 30px; /* altezza comune dei controlli nella barra dei filtri */
-    --pane-h: 5.5rem; /* i due pannelli sono alti uguale, così passare da uno all'altro non muove la tabella */
     --title-w: 26rem; /* larghezza della colonna del titolo: fissa, così la striscia si calcola tutta in CSS */
     --strip: 3rem; /* quanto del titolo resta visibile a tabella scorsa. In rem e non in ch: il ch dipende dal font della cella, e l'intestazione in grassetto si fermava più in là delle righe */
     --cell-pad: 5px; /* il padding orizzontale delle celle, che serve anche in calc() */
-    /* Barre dei voti: il colore della fonte, lo stesso del pannello di dettaglio, schiarito perché il numero sopra resti nero. */
-    --c-own: #2a78d633; --c-al: #eb683433; --c-mal: #1baf7a33;
+    /* Il colore di ogni fonte, quello del suo sito: arancio Crunchyroll, azzurro AniList, blu scuro MAL. I due blu
+       si distinguono per chiarezza. Nelle barre dei voti sono schiariti, perché il numero sopra resti nero. */
+    --src-own: #f47521; --src-al: #00aaff; --src-mal: #2e51a2;
+    --c-own: color-mix(in srgb, var(--src-own) 28%, transparent);
+    --c-al: color-mix(in srgb, var(--src-al) 28%, transparent);
+    --c-mal: color-mix(in srgb, var(--src-mal) 28%, transparent);
   }
   /* Layout a colonna a tutta altezza: titolo e filtri fissi, solo .scroller scorre (in entrambe le direzioni); l'intestazione della tabella è sticky dentro di esso. */
   html, body { height: 100%; }
@@ -82,6 +85,7 @@
   .peek { position: sticky; left: var(--cell-pad); width: var(--strip); } /* left pari al padding della cella: il testo non sobbalza quando la colonna si ferma */
   .full { display: block; width: calc(var(--title-w) - var(--cell-pad)); overflow: hidden; text-overflow: ellipsis; }
   td.title a { text-decoration: none; }
+  td.title a:hover { text-decoration: underline; }
   /* Le puntate come barrette sotto i generi, nello spazio vuoto in fondo alla cella: l'involucro è alto
      zero e la striscia si sposta in giù con position: relative, che non conta nel layout, così la riga
      non cresce. Sta in un .peek come il testo, quindi a tabella scorsa resta visibile l'inizio della serie.
@@ -103,6 +107,7 @@
   }
   :root { --ep: #dcd6ce; }
   th { cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); } /* z-index: senza, il testo delle righe scorre sopra; box-shadow: con border-collapse il bordo inferiore non resta sticky */
+  th[data-k="weighted"] { line-height: 1.1; } /* «V Crunchy Bayes» va a capo apposta: su una riga allargherebbe la colonna il doppio dei numeri */
   th.sorted { color: var(--accent); }
   th.sorted::after { content: "\00a0▲" attr(data-ord); } /* data-ord: posizione nella pila di ordinamento, vuota quando il criterio è uno solo */
   th.sorted.desc::after { content: "\00a0▼" attr(data-ord); }
@@ -111,12 +116,13 @@
   td.nomatch { color: var(--line); }
   td.flag { font-size: 1.2em; padding-left: 0; padding-right: 0; }
   td.flag.partial { opacity: .3; } /* disponibile, ma in quel paese mancano stagioni: il suggerimento dice quali */
-  /* Watchlist e voto personale in fondo al titolo: il titolo si accorcia con l'ellissi, i simboli restano. */
-  td.title a.full { display: flex; align-items: baseline; gap: 4px; }
+  /* Watchlist e voto personale in fondo al titolo: il titolo si accorcia con l'ellissi, i simboli restano.
+     Il link è solo il testo del titolo: il resto della cella apre il dettaglio come il resto della riga. */
+  td.title .name { display: flex; align-items: baseline; gap: 4px; }
   td.title .tt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   td.title .mk { flex: none; color: var(--accent); font-size: 11px; display: inline-flex; align-items: center; gap: 3px; padding-right: 6px; }
   td.title .mk svg { width: 8px; height: 11px; }
-  /* Voti: barra dietro al numero, da sinistra, vuota a 1 e piena a 5 (scala comune, così le colonne si confrontano);
+  /* Voti: barra dietro al numero, da sinistra, vuota a 2 e piena a 10 (scala comune in decimi, così le colonne si confrontano);
      sotto, piccoli, i votanti. Due righe da 42px senza allungare la riga. La barra è un ::before e non un gradiente
      per avere la testa arrotondata; isolation la tiene sopra lo sfondo della cella e sotto il testo. Un px d'aria a
      sinistra e due sopra e sotto, così celle e righe vicine non si fondono in un blocco unico. */
@@ -129,26 +135,38 @@
      virtualizzazione conta su righe tutte alte uguali, e sul telefono una matrice dentro una riga non si legge. */
   #rows tr:not(.pad):not(.sizer) { cursor: pointer; }
   .sheet-back { position: fixed; inset: 0; background: #0006; z-index: 30; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow: auto; z-index: 31; box-sizing: border-box;
-    background: var(--panel); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px #0003; padding: 14px 16px 28px; font-size: .9rem; }
+  /* Il pannello non scorre: scorre il suo contenuto (.sheet-in), così la ✕ resta ferma nell'angolo. Sul desktop
+     è largo quanto basta a leggerlo, centrato: a tutta larghezza grafico e tabella si allargherebbero a vuoto. */
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 46rem; margin: 0 auto; max-height: 82vh; display: flex; flex-direction: column; z-index: 31; box-sizing: border-box;
+    background: var(--panel); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px #0003; font-size: .9rem; }
+  .sheet-in { overflow: auto; padding: 14px 16px 28px; }
   .sheet-back[hidden], .sheet[hidden] { display: none; }
-  .sheet:focus { outline: none; }
+  .sheet:focus, .sheet-in:focus { outline: none; }
   .sheet h2 { font-size: 1.15rem; margin: 0 32px 2px 0; line-height: 1.25; }
   .sheet .sub { color: var(--muted); font-size: .8rem; }
-  .sheet .close { position: absolute; top: 8px; right: 10px; font: inherit; font-size: 1.3rem; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 8px; }
+  .sheet .close { position: absolute; top: 6px; right: 8px; z-index: 1; font: inherit; font-size: 1.3rem; border: 0; border-radius: 6px; background: var(--panel); color: var(--muted); cursor: pointer; padding: 4px 8px; }
   .sheet h3 { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 6px; }
-  /* Distribuzioni a confronto: tutte su 5 fasce, una linea per fonte, colori categorici in ordine fisso
-     (validati: blu, arancio, acqua). La tabella sotto porta i numeri esatti, anche per chi non distingue i colori. */
-  .dist-chart { width: 100%; height: auto; display: block; }
+  /* Distribuzioni a confronto: tutte su 5 fasce, una linea per fonte nel colore della fonte. Il grafico è la prima
+     riga della tabella, nelle cinque colonne delle stelle: ogni punto sta sopra il suo numero, e l'intestazione
+     delle stelle fa da asse. Si disegna in pixel veri sulla larghezza della cella (drawDist), non scalato con un
+     viewBox: scalato, sul desktop testo e punti diventavano enormi. La tabella porta i numeri esatti, anche per
+     chi non distingue i colori. */
+  .dist-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums; margin-top: 6px; }
+  .dist-table col.lab { width: 5.2rem; }
+  .dist-table col.mean { width: 3.6rem; }
+  .sheet .dist-table th, .sheet .dist-table td { height: auto; position: static; padding: 2px 4px; cursor: default; background: none; box-shadow: none; border-bottom: 1px solid var(--line); text-align: right; font-weight: normal; line-height: 1.2; }
+  .sheet .dist-table th { color: var(--muted); }
+  .sheet .dist-table td:first-child, .sheet .dist-table th:first-child { text-align: left; white-space: normal; }
+  .sheet .dist-table .st { text-align: center; }
+  .sheet .dist-table tr.chart td { padding: 0; border: 0; }
+  .dist-table .pc { font-size: .85em; color: var(--muted); } /* il % più piccolo: sul telefono le colonne sono strette e i numeri si toccherebbero */
+  .dist-table small { display: block; font-size: 9px; color: var(--muted); }
+  .dist-table .key { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+  .dist-chart { display: block; overflow: visible; }
   .dist-chart text { font-size: 9px; fill: var(--muted); font-variant-numeric: tabular-nums; }
   .dist-chart .grid { stroke: var(--line); stroke-width: 1; }
   .dist-chart path { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-  .dist-chart circle { stroke: var(--panel); stroke-width: 2; }
-  .dist-table { width: 100%; border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums; margin-top: 6px; }
-  .sheet .dist-table th, .sheet .dist-table td { height: auto; position: static; padding: 2px 4px; cursor: default; background: none; box-shadow: none; border-bottom: 1px solid var(--line); text-align: right; font-weight: normal; }
-  .sheet .dist-table th { color: var(--muted); }
-  .sheet .dist-table td:first-child, .sheet .dist-table th:first-child { text-align: left; }
-  .dist-table .key { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+  .dist-chart circle { stroke: var(--panel); stroke-width: 1.5; }
   .matrix-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
   .sheet table.matrix { width: auto; border-collapse: collapse; font-size: .8rem; }
   .sheet .matrix th, .sheet .matrix td { height: auto; position: static; padding: 3px 5px; cursor: default; background: none; box-shadow: none; border-bottom: 1px solid var(--line); text-align: right; font-weight: normal; }
@@ -176,16 +194,19 @@
   .ts-wrapper.multi .ts-control > .item.out::before { content: "− "; text-decoration: none; }
   .ts-wrapper.multi .ts-control > .item .remove { border-left-color: currentColor; opacity: .6; }
 
-  /* Filtri e ordinamento sono due schede nello stesso spazio, della stessa altezza: l'ordinamento
-     non è più un pannello che si apre sopra la tabella, e passare da una scheda all'altra non
-     sposta niente. Quel che non ci sta scorre dentro la scheda. */
+  /* Filtri, ordinamento, formule e voti sono schede nello stesso spazio, della stessa altezza: passare da una
+     all'altra non sposta la tabella. Le schede stanno tutte nella stessa cella di una griglia, quelle nascoste solo
+     invisibili, così lo spazio è alto quanto la più alta e ognuna si legge intera, senza scorrere dentro. Niente
+     overflow: taglierebbe anche il bordo del fuoco dei campi. */
   .tabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
   .tab { font: inherit; font-size: .9rem; cursor: pointer; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); padding: 6px 10px; margin-bottom: -1px; }
   .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
   .tab, #count { white-space: nowrap; } /* tre schede e il conteggio su una riga sola, anche sul telefono */
-  .panes { height: var(--pane-h); overflow-y: auto; overflow-x: hidden; }
-  .panes > [hidden] { display: none; }
-  #paneOrdine { max-width: 26rem; }
+  .panes { display: grid; }
+  .panes > * { grid-area: 1 / 1; align-self: start; min-width: 0; }
+  .panes > [hidden] { display: block; visibility: hidden; }
+  .panes > .filters[hidden] { display: flex; }
+  #sortList, #paneOrdine .row { max-width: 26rem; }
   #sortList { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   #sortList li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg); }
   #sortList li.empty { justify-content: center; color: var(--muted); border: 1px dashed var(--line); }
@@ -194,19 +215,20 @@
   #sortList button, #sortClear { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--fg); padding: 2px 7px; }
   #paneOrdine .row { display: flex; gap: 6px; }
   #paneOrdine select { flex: 1; font: inherit; font-size: .85em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px; }
-  #paneVoti { max-width: 26rem; }
   #paneOrdine .hint, #paneVoti .hint, #paneFx .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.35; }
+  #paneVoti .hint { flex-basis: 100%; margin: 0; }
   .sortable-ghost { opacity: .4; }
   /* Formule: la colonna ƒ c'è solo quando una formula ordina, ed è subito dopo il titolo, dove sul telefono si vede senza scorrere. */
   table.nofx .fcol { display: none; }
-  #paneFx { max-width: 34rem; }
+  #paneFx .row, .fx-chips { max-width: 34rem; }
   #paneFx .row { display: flex; gap: 6px; }
   #fx { flex: 1; min-width: 0; height: var(--h); box-sizing: border-box; padding: 0 8px; font: .9rem ui-monospace, monospace; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
   #fx.bad { border-color: var(--out); }
   #paneFx button { font: inherit; font-size: .85em; cursor: pointer; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--fg); padding: 2px 8px; }
   #paneFx button:disabled { opacity: .4; cursor: default; }
   /* I nomi da toccare invece che da scrivere: su una riga sola che scorre di lato, così non spingono giù il resto. */
-  .fx-chips { display: flex; gap: 4px; overflow-x: auto; margin-top: 6px; padding-bottom: 2px; }
+  .fx-chips { display: flex; gap: 4px; overflow-x: auto; margin: 3px -3px 0; padding: 3px; } /* il padding fa posto al bordo del fuoco, che l'overflow taglierebbe */
+  @media (min-width: 641px) { .fx-chips { flex-wrap: wrap; max-width: none; } } /* sul desktop c'è posto per vederli tutti */
   #paneFx .fx-chips button { flex: none; font-family: ui-monospace, monospace; padding: 2px 6px; }
   .fx-err { margin-top: 4px; font-size: .78rem; color: var(--out); }
   .fx-info { margin-top: 4px; font-size: .78rem; color: var(--muted); }
@@ -224,12 +246,13 @@
     .scroller { padding: 0 12px 16px; }
     h1 { margin-bottom: 4px; }
     .filters { gap: 8px; }
-    :root { --pane-h: 9rem; } /* sul telefono i quattro campi dei filtri stanno in colonna: 4 × 30px più gli spazi, senza aria sotto */
     .filters > input[type=text], .ts-wrapper, .group, .seg { width: 100%; }
     .group input { flex: 1; width: auto; }
     .seg label { flex: 1; }
     .seg span { width: 100%; justify-content: center; }
     .tab { padding: 6px 7px; }
+    .dist-table col.lab { width: 4.6rem; }
+    .sheet .dist-table .st { padding: 2px 1px; }
     .tab .long { display: none; } /* sul telefono la scheda delle formule è solo ƒ: con la parola intera le schede non stanno su una riga */
     #count { font-size: .78rem; }
   }
@@ -264,8 +287,8 @@
   </span>
 </div>
 <div class="filters" id="paneVoti" role="tabpanel" hidden>
-  <span class="group" title="voti di fiducia della media bayesiana: V Bayes = min(voto, (v·voto + m·media catalogo)/(v+m))">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
-  <p class="hint">V Bayes tira il voto verso la media del catalogo come se ogni serie avesse altri m voti nella media, e solo verso il basso: con pochi votanti una serie non sale in cima. Più m è alto, più servono voti per contare.</p>
+  <span class="group" title="voti di fiducia della media bayesiana: V Crunchy Bayes = min(voto, (v·voto + m·media catalogo)/(v+m))">m Bayes <input id="m" type="number" step="1000" min="0" value="__M__"></span>
+  <p class="hint">V Crunchy Bayes tira il voto verso la media del catalogo come se ogni serie avesse altri m voti nella media, e solo verso il basso: con pochi votanti una serie non sale in cima. Più m è alto, più servono voti per contare.</p>
 </div>
 <div id="paneFx" role="tabpanel" hidden>
   <div class="row">
@@ -278,7 +301,7 @@
   <div class="fx-info" id="fxInfo"></div>
   <div class="fx-chips" id="fxChips"></div>
   <div id="fxActive" hidden>filtro <code></code><button id="fxOff" type="button" title="togli il filtro">✕</button></div>
-  <p class="hint">«Ordina» mette la formula al posto dell'ordinamento, «Filtra» tiene le serie per cui è vera. Voti <code>v v_al v_mal v_bayes</code> sulla scala 1–5, votanti <code>n n_al n_mal</code>, <code>s1</code>…<code>s5</code> la % di ogni stella, <code>sd</code> quanto sono sparse; tocca un nome qui sopra per sapere cos'è. Se manca un dato manca il risultato, anche in <code>avg</code>, <code>and</code> e <code>or</code>: la serie non passa il filtro e va in fondo. <code>ifnull(x, 0)</code> mette 0 dove x manca.</p>
+  <p class="hint">«Ordina» mette la formula al posto dell'ordinamento, «Filtra» tiene le serie per cui è vera. Voti <code>v v_al v_mal v_bayes</code> in decimi, votanti <code>n n_al n_mal</code>, <code>s1</code>…<code>s5</code> la % di ogni stella, <code>sd</code> quanto sono sparse; tocca un nome qui sopra per sapere cos'è. Se manca un dato manca il risultato, anche in <code>avg</code>, <code>and</code> e <code>or</code>: la serie non passa il filtro e va in fondo. <code>ifnull(x, 0)</code> mette 0 dove x manca.</p>
 </div>
 <div id="paneOrdine" role="tabpanel" hidden>
   <ul id="sortList"></ul>
@@ -295,10 +318,10 @@
   <thead><tr>
     <th data-k="title"><div class="peek"><div class="full">Titolo</div></div></th>
     <th class="fcol" data-num>ƒ</th>
-    <th data-k="rating" data-num title="media ricalcolata dai conteggi per stella; sotto, i votanti">Voto</th>
-    <th data-k="weighted" data-num title="media bayesiana che può solo abbassare il voto: min(voto, (v·voto + m·media catalogo)/(v+m)), m regolabile nei filtri; sotto, i votanti">V Bayes</th>
-    <th data-k="al" data-num title="voto su AniList portato sulla scala 0–5 (centesimi / 20): media delle stagioni e dei film abbinati, pesata sui votanti; sotto, i votanti. ✗ nessun abbinamento">V AniList</th>
-    <th data-k="mal" data-num title="voto su MyAnimeList portato sulla scala 0–5 (decimi / 2): media delle stagioni e dei film abbinati, pesata sui votanti; sotto, i votanti. ✗ nessun abbinamento">V MAL</th>
+    <th data-k="rating" data-num title="voto su Crunchyroll in decimi (stelline × 2), media ricalcolata dai conteggi per stella; sotto, i votanti">V Crunchy</th>
+    <th data-k="weighted" data-num title="media bayesiana del voto Crunchyroll, che può solo abbassarlo: min(voto, (v·voto + m·media catalogo)/(v+m)), m regolabile nella scheda Voti; sotto, i votanti" data-label="V Crunchy Bayes">V Crunchy<br>Bayes</th>
+    <th data-k="al" data-num title="voto su AniList in decimi (centesimi / 10): media delle stagioni e dei film abbinati, pesata sui votanti; sotto, i votanti. ✗ nessun abbinamento">V AniList</th>
+    <th data-k="mal" data-num title="voto su MyAnimeList, in decimi: media delle stagioni e dei film abbinati, pesata sui votanti; sotto, i votanti. ✗ nessun abbinamento">V MAL</th>
     <th data-k="year" data-num>Anno</th>
     <th data-k="seasons" data-num title="stagioni guardabili in Italia">Stagioni</th>
     <th data-k="episodes" data-num title="puntate guardabili in Italia; il totale fra tutti i paesi nel suggerimento della cella">Episodi</th>
@@ -309,7 +332,7 @@
 </table>
 </div>
 <div class="sheet-back" id="sheetBack" hidden></div>
-<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1" hidden></section>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden><button class="close" type="button" aria-label="chiudi">✕</button><div class="sheet-in" id="sheetIn" tabindex="-1"></div></section>
 <script id="data" type="application/json">__ROWS__</script>
 <script>__VENDOR_JS__</script>
 <script>
@@ -384,10 +407,10 @@
     const tip = r.ep_total ? `${k} viste su ${n} puntate${half ? `, la ${k + 1}ª iniziata` : ""}` : `${n} puntate`;
     return `<div class="peek eps"><div class="full" style="--n:${n};--k:${k};--half:${half};--gap:${n > 110 ? 0 : 1}px" title="${tip}"></div></div>`;
   };
-  /** Un voto sulla scala 1–5: il numero, la barra dietro e i votanti sotto. */
+  /** Un voto in decimi: il numero, la barra dietro (da 2, una stella, a 10) e i votanti sotto. */
   const scoreCell = (score, digits, votes, color, tip = "") =>
-    `<td class="num score" style="--p:${Math.min(1, Math.max(0, (score - 1) / 4)).toFixed(3)};--c:var(--c-${color})"${tip && ` title="${tip}"`}>${score.toFixed(digits)}<small>${fmt.format(votes)}</small></td>`;
-  /** Voto esterno sulla scala 0–5: il voto, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
+    `<td class="num score" style="--p:${Math.min(1, Math.max(0, (score - 2) / 8)).toFixed(3)};--c:var(--c-${color})"${tip && ` title="${tip}"`}>${score.toFixed(digits)}<small>${fmt.format(votes)}</small></td>`;
+  /** Voto esterno in decimi: il voto, una ✗ se la serie non si abbina, niente se i voti esterni non sono stati scaricati. */
   const extCell = (score, raw, scale, votes, n, site, color) =>
     score === -2 ? `<td></td>`
     : score < 0 ? `<td class="num nomatch" title="nessuna voce di ${site} abbinata">✗</td>`
@@ -535,13 +558,13 @@
   const ROW_H = 42;
   /** Una funzione per colonna, nell'ordine delle intestazioni. */
   const cells = [
-    (r) => `<td class="title"><div class="peek"><a class="full" href="${r.url}" target="_blank" title="${esc(r.title)}"><span class="tt">${esc(r.title)}</span>${marks(r)}</a></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>`,
+    (r) => `<td class="title"><div class="peek"><div class="full name"><a class="tt" href="${r.url}" target="_blank" title="${esc(r.title)}">${esc(r.title)}</a>${marks(r)}</div></div><div class="peek"><div class="full genres" title="${esc(r.genres.join(", "))}">${esc(r.genres.join(", "))}</div></div>${epsStrip(r)}</td>`,
     (r) => {
       const y = shownFx ? r.f[shownFx] ?? NaN : NaN;
       return Number.isNaN(y) ? `<td class="num fcol nomatch">–</td>` : `<td class="num fcol">${fxDigits ? y.toFixed(fxDigits) : fmt.format(y)}</td>`;
     },
-    (r) => scoreCell(r.rating, 3, r.votes, "own"),
-    (r) => scoreCell(r.weighted, 3, r.votes, "own"),
+    (r) => scoreCell(r.rating, 2, r.votes, "own"),
+    (r) => scoreCell(r.weighted, 2, r.votes, "own"),
     (r) => extCell(r.al, r.al_raw, 100, r.al_votes, r.al_n, "AniList", "al"),
     (r) => extCell(r.mal, r.mal_raw, 10, r.mal_votes, r.mal_n, "MAL", "mal"),
     (r) => `<td class="num">${r.year ?? ""}</td>`,
@@ -602,21 +625,25 @@
   for (const th of ths) th.onclick = () => { clickSort(th.dataset.k); render(); };
 
   /* ---- pannello di dettaglio ------------------------------------------------------------- */
-  /* Le fonti dei voti nel dettaglio, in ordine fisso: il colore segue la fonte, non la posizione. */
+  /* Le fonti dei voti nel dettaglio, in ordine fisso: il colore segue la fonte, non la posizione, ed è lo stesso delle barre. */
   const SOURCES = [
-    { label: "Crunchy", color: "#2a78d6" },
-    { label: "AniList", color: "#eb6834" },
-    { label: "MAL", color: "#1baf7a" },
+    { label: "Crunchy", color: "var(--src-own)" },
+    { label: "AniList", color: "var(--src-al)" },
+    { label: "MAL", color: "var(--src-mal)" },
   ];
-  /** Quote per fascia (1★…5★, in %) e votanti di ogni fonte che ha una distribuzione. AniList va da 10 a 100:
-   *  le fasce si accoppiano (10–20 → 1★ … 90–100 → 5★), la stessa scala del V AniList, che divide per 20. */
+  /** Quote per fascia (1★…5★, in %), votanti per fascia e in tutto di ogni fonte che ha una distribuzione. AniList va
+   *  da 10 a 100: le fasce si accoppiano (10–20 → 1★ … 90–100 → 5★). */
   function distributions(r) {
     const out = [];
-    if (r.votes) out.push({ ...SOURCES[0], pct: r.stars.map((s) => s.pct), votes: r.votes, mean: r.rating });
+    // I votanti per stella il servizio li dà con tre cifre significative ("94.8K"): si mostrano così, non ricostruiti dalle quote.
+    if (r.votes) out.push({ ...SOURCES[0], pct: r.stars.map((s) => s.pct), n: r.stars.map((s) => s.shown.replace(".", ",")), votes: r.votes, mean: r.rating });
     const al = Array(10).fill(0);
     for (const e of r.entries) e.al_dist?.forEach((n, i) => (al[i] += n));
     const alTot = al.reduce((a, n) => a + n, 0);
-    if (alTot) out.push({ ...SOURCES[1], pct: [0, 1, 2, 3, 4].map((i) => ((al[2 * i] + al[2 * i + 1]) / alTot) * 100), votes: alTot, mean: r.al });
+    if (alTot) {
+      const n = [0, 1, 2, 3, 4].map((i) => al[2 * i] + al[2 * i + 1]);
+      out.push({ ...SOURCES[1], pct: n.map((k) => (k / alTot) * 100), n: n.map((k) => fmt.format(k)), votes: alTot, mean: r.al });
+    }
     return out; // MAL: la sua API non dà la distribuzione, e Jikan per ora non risponde
   }
   /** Curva monotona per i punti (Fritsch–Carlson): passa per ogni punto senza inventare picchi o valli fra una fascia e l'altra. */
@@ -634,25 +661,31 @@
     for (let i = 0; i < n - 1; i++) d += ` C${pts[i][0] + dx[i] / 3},${pts[i][1] + (t[i] * dx[i]) / 3} ${pts[i + 1][0] - dx[i] / 3},${pts[i + 1][1] - (t[i + 1] * dx[i]) / 3} ${pts[i + 1][0]},${pts[i + 1][1]}`;
     return d;
   }
-  /** Le distribuzioni di tutte le fonti nello stesso grafico, e sotto la tabella con i numeri esatti. */
-  function distSection(r) {
-    const ds = distributions(r);
+  /** La tabella delle distribuzioni, con la prima riga vuota per il grafico: lo disegna drawDist quando il pannello è aperto e la cella ha una larghezza. */
+  function distSection(ds) {
     if (!ds.length) return "";
-    const W = 320, H = 130, L = 34, R = 10, T = 8, B = 18;
+    const stars = [1, 2, 3, 4, 5];
+    return `<h3>Distribuzione dei voti, in % dei votanti</h3><table class="dist-table"><colgroup><col class="lab">${stars.map(() => "<col>").join("")}<col class="mean"></colgroup>` +
+      `<thead><tr class="chart"><td></td><td colspan="5" id="distPlot"></td><td></td></tr><tr><th></th>${stars.map((n) => `<th class="st">${n}★</th>`).join("")}<th>voto</th></tr></thead><tbody>` +
+      ds.map((d) => `<tr><td><span class="key" style="background:${d.color}"></span>${d.label}</td>${d.pct.map((v, i) => `<td class="st">${v.toFixed(1)}<span class="pc">%</span><small>${d.n[i]}</small></td>`).join("")}<td>${d.mean > 0 ? d.mean.toFixed(2) : "—"}<small>${fmt.format(d.votes)}</small></td></tr>`).join("") +
+      `</tbody></table>`;
+  }
+  /** Le distribuzioni di tutte le fonti nello stesso grafico, ogni punto al centro della colonna della sua stella. Le quote dell'asse stanno a sinistra, sopra la colonna delle fonti. */
+  function drawDist(ds) {
+    const cell = $("distPlot");
+    if (!cell) return;
+    const W = cell.clientWidth, H = 110, T = 8, B = 8;
     const top = Math.min(100, Math.ceil(Math.max(...ds.flatMap((d) => d.pct)) / 10) * 10);
-    const x = (i) => L + (i * (W - L - R)) / 4, y = (v) => T + (1 - v / top) * (H - T - B);
-    const grid = [0, top / 2, top].map((v) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 4}" y="${y(v) + 3}" text-anchor="end">${v}%</text>`).join("");
-    const xs = [1, 2, 3, 4, 5].map((n, i) => `<text x="${x(i)}" y="${H - 4}" text-anchor="middle">${n}★</text>`).join("");
+    const x = (i) => ((i + 0.5) * W) / 5, y = (v) => T + (1 - v / top) * (H - T - B);
+    const grid = [0, top / 2, top].map((v) => `<line class="grid" x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="-6" y="${y(v) + 3}" text-anchor="end">${v}%</text>`).join("");
     const lines = ds.map((d) => {
       const pts = d.pct.map((v, i) => [x(i), y(v)]);
-      return `<path d="${smooth(pts)}" stroke="${d.color}"/>` + pts.map(([px, py], i) => `<circle cx="${px}" cy="${py}" r="4" fill="${d.color}"><title>${d.label}, ${i + 1}★: ${d.pct[i].toFixed(1)}%</title></circle>`).join("");
+      return `<path d="${smooth(pts)}" style="stroke:${d.color}"/>` + pts.map(([px, py], i) => `<circle cx="${px}" cy="${py}" r="3.5" style="fill:${d.color}"><title>${d.label}, ${i + 1}★: ${d.pct[i].toFixed(1)}%</title></circle>`).join("");
     }).join("");
-    const table = `<table class="dist-table"><thead><tr><th></th>${[1, 2, 3, 4, 5].map((n) => `<th>${n}★</th>`).join("")}<th>media</th><th>votanti</th></tr></thead><tbody>` +
-      ds.map((d) => `<tr><td><span class="key" style="background:${d.color}"></span>${d.label}</td>${d.pct.map((v) => `<td>${v.toFixed(1)}</td>`).join("")}<td>${d.mean > 0 ? d.mean.toFixed(2) : "—"}</td><td>${fmt.format(d.votes)}</td></tr>`).join("") + `</tbody></table>`;
-    return `<h3>Distribuzione dei voti, in % dei votanti</h3><svg class="dist-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="distribuzione dei voti per fonte">${grid}${xs}${lines}</svg>${table}`;
+    cell.innerHTML = `<svg class="dist-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="distribuzione dei voti per fonte">${grid}${lines}</svg>`;
   }
-  function sheetHtml(r) {
-    let matrix = `<p class="sub">Le stagioni per paese arrivano col prossimo catalogo.</p>`;
+  function sheetHtml(r, ds) {
+    let matrix = `<p class="sub">Le puntate per paese arrivano col prossimo catalogo.</p>`;
     if (r.matrix) {
       const cs = countries.filter((c) => r.matrix.by[c.iso2]);
       const cell = (c, i, max) => { const n = r.matrix.by[c.iso2][i]; return `<td class="${c.iso2 === "IT" ? "home " : ""}${!n ? "no" : n < max ? "less" : ""}">${n || "–"}</td>`; };
@@ -663,15 +696,23 @@
     const entries = r.entries.length
       ? `<ul class="entries">${r.entries.map((e) => `<li><span class="t">${esc(e.title || "(senza titolo)")}${e.format ? ` · ${e.format}` : ""}${e.year ? ` · ${e.year}` : ""}</span><span class="v"><a href="https://anilist.co/anime/${e.al}" target="_blank">AniList</a> ${e.al_score != null ? `${e.al_score}/100 (${fmt.format(e.al_votes)})` : "—"}${e.mal ? ` · <a href="https://myanimelist.net/anime/${e.mal}" target="_blank">MAL</a> ${e.mal_score != null ? `${e.mal_score}/10 (${fmt.format(e.mal_votes)})` : "—"}` : ""}</span></li>`).join("")}</ul>`
       : `<p class="sub">${r.al === -2 ? "Le voci di AniList e MAL arrivano col prossimo calcolo dei voti." : "Nessuna voce di AniList abbinata."}</p>`;
-    return `<button class="close" type="button" aria-label="chiudi">✕</button>
-      <h2 id="sheetTitle"><a href="${r.url}" target="_blank">${esc(r.title)}</a></h2>
+    return `<h2 id="sheetTitle"><a href="${r.url}" target="_blank">${esc(r.title)}</a></h2>
       <div class="sub">${esc(r.genres.join(", "))}</div>
-      ${distSection(r)}
-      <h3>Stagioni per paese</h3>${matrix}
+      ${distSection(ds)}
+      <h3>Puntate per paese</h3>${matrix}
       <h3>AniList e MyAnimeList, voce per voce</h3>${entries}`;
   }
-  const openSheet = (r) => { $("sheet").innerHTML = sheetHtml(r); $("sheet").hidden = $("sheetBack").hidden = false; $("sheet").scrollTop = 0; $("sheet").focus(); }; // il fuoco sul pannello, non sulla ✕: Esc e Tab funzionano senza il bordo del fuoco sul tasto
-  const closeSheet = () => { $("sheet").hidden = $("sheetBack").hidden = true; };
+  let sheetDs = null; // le distribuzioni della serie aperta, per ridisegnare il grafico quando la finestra cambia larghezza
+  const openSheet = (r) => {
+    sheetDs = distributions(r);
+    $("sheetIn").innerHTML = sheetHtml(r, sheetDs);
+    $("sheet").hidden = $("sheetBack").hidden = false;
+    drawDist(sheetDs);
+    $("sheetIn").scrollTop = 0;
+    $("sheetIn").focus(); // il fuoco su ciò che scorre, non sulla ✕: Esc e i tasti di scorrimento funzionano senza il bordo del fuoco sul tasto
+  };
+  const closeSheet = () => { sheetDs = null; $("sheet").hidden = $("sheetBack").hidden = true; };
+  addEventListener("resize", () => sheetDs && drawDist(sheetDs));
   $("rows").addEventListener("click", (e) => {
     if (e.target.closest("a")) return; // il titolo resta il link alla serie
     const tr = e.target.closest("tr[data-i]");

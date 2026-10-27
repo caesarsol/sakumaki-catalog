@@ -109,7 +109,8 @@ const rows = top.map((s) => ({
   id: s.id,
   title: tidy(s.title),
   url: `${SITE_BASE}/series/${s.id}/${s.slug_title}`,
-  rating: s.rating_fine,
+  // Tutti i voti della pagina in decimi, come MAL e AniList (che è in centesimi): le stelline per 2.
+  rating: round3(s.rating_fine * 2),
   votes: s.rating.total,
   stars: starShares(s),
   year: s.series_metadata.series_launch_year,
@@ -142,13 +143,13 @@ const rows = top.map((s) => ({
   ep_total: progress[s.id]?.ep_total ?? 0,
   ep_started: progress[s.id]?.ep_started ?? false,
   countries: s.countries,
-  // Sulla scala 0–5 del servizio per confrontarli a colpo d'occhio: AniList è in centesimi, MAL in decimi.
+  // In decimi come il voto del servizio: AniList è in centesimi, MAL è già in decimi.
   // -1 nessun abbinamento, -2 voti esterni non scaricati: numeri e non null per l'ordinamento, come wl_season.
-  al: external ? round3((external.series[s.id]?.al?.score ?? -20) / 20) : -2,
+  al: external ? round3((external.series[s.id]?.al?.score ?? -10) / 10) : -2,
   al_raw: external?.series[s.id]?.al?.score ?? null,
   al_votes: external?.series[s.id]?.al?.votes ?? 0,
   al_n: external?.series[s.id]?.al?.entries ?? 0,
-  mal: external?.mal_available ? round3((external.series[s.id]?.mal?.score ?? -2) / 2) : -2,
+  mal: external?.mal_available ? round3(external.series[s.id]?.mal?.score ?? -1) : -2,
   mal_raw: external?.series[s.id]?.mal?.score ?? null,
   mal_votes: external?.series[s.id]?.mal?.votes ?? 0,
   mal_n: external?.series[s.id]?.mal?.entries ?? 0,
@@ -172,7 +173,7 @@ const html = template
   .replaceAll("__SUBTITLE__", MIN_RATING > 0 ? `serie con voto ≥ ${MIN_RATING}` : "catalogo serie")
   .replace("__M__", String(WEIGHT_VOTES))
   .replace("__COUNTRIES__", JSON.stringify(countries))
-  .replace("__C__", String(round3(catalogMean)))
+  .replace("__C__", String(round3(catalogMean * 2))) // in decimi, come i voti delle righe
   .replace("__ROWS__", () => JSON.stringify(rows).replaceAll("</", "<\\/"))
   .replace("__VENDOR_CSS__", () => vendorCss)
   .replace("__VENDOR_JS__", () => vendorJs);

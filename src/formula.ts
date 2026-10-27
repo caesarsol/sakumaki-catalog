@@ -11,11 +11,11 @@
  */
 
 export const FX_VARS: Record<string, string> = {
-  v: "voto Crunchyroll, 1–5", v_bayes: "V Bayes, 1–5 (dipende da m nella scheda Voti)", v_al: "voto AniList, 1–5", v_mal: "voto MAL, 1–5",
+  v: "voto Crunchyroll in decimi (stelline × 2)", v_bayes: "V Crunchy Bayes in decimi (dipende da m nella scheda Voti)", v_al: "voto AniList in decimi", v_mal: "voto MAL in decimi",
   n: "votanti Crunchyroll", n_al: "votanti AniList", n_mal: "votanti MAL",
   ...Object.fromEntries([1, 2, 3, 4, 5].map((k) => [`s${k}`, `% di votanti Crunchyroll con ${k}★`])),
   sd: "deviazione standard delle stelle: alta se i voti sono sparsi o divisi fra 1★ e 5★ (0–2)",
-  my: "il tuo voto, 1–5; manca se non l'hai votata", anno: "anno di uscita", ep: "puntate guardabili in Italia", stagioni: "stagioni guardabili in Italia",
+  my: "il tuo voto in stelline, 1–5; manca se non l'hai votata", anno: "anno di uscita", ep: "puntate guardabili in Italia", stagioni: "stagioni guardabili in Italia",
   giorni: "giorni dall'ultima puntata", viste: "puntate viste, per le serie in watchlist", wl: "0 fuori watchlist, 1 dentro, 2 preferita",
 };
 
@@ -45,7 +45,7 @@ export const FX_PRESETS = [
   { label: "AniList più generoso di Crunchyroll", fx: "v_al - v" },
 ];
 export const FX_EXAMPLES = [
-  "avg(v, v_al, v_mal) >= 4.3 and n < 2000",
+  "avg(v, v_al, v_mal) >= 8.6 and n < 2000",
   "s1 >= 10 and s5 >= 50",
   "ifnull(my, 0) >= 1 and wl == 0",
   "giorni <= 14",
