@@ -134,14 +134,20 @@
   /* Pannello di dettaglio di una serie: si apre dal basso, sopra la tabella. Non dentro la riga: la
      virtualizzazione conta su righe tutte alte uguali, e sul telefono una matrice dentro una riga non si legge. */
   #rows tr:not(.pad):not(.sizer) { cursor: pointer; }
-  .sheet-back { position: fixed; inset: 0; background: #0006; z-index: 30; }
+  .sheet-back { position: fixed; inset: 0; background: #0006; z-index: 30; transition: opacity var(--sheet-ms) ease; }
   /* Il pannello non scorre: scorre il suo contenuto (.sheet-in), così la ✕ resta ferma nell'angolo. Sul desktop
      è largo quanto basta a leggerlo, centrato: a tutta larghezza grafico e tabella si allargherebbero a vuoto. */
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 46rem; margin: 0 auto; max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; z-index: 31; box-sizing: border-box;
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 46rem; margin: 0 auto; height: 80vh; height: 80dvh; display: flex; flex-direction: column; overflow: hidden; z-index: 31; box-sizing: border-box;
     background: var(--panel); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px #0003; font-size: .9rem; }
   /* pan-y: lo scorrimento in verticale resta al browser, quello di lato è lo swipe fra le serie (sheetSwipe).
      La matrice dei paesi, che scorre di lato per conto suo, è un contenitore di scorrimento e non ne risente. */
-  .sheet-in { overflow: auto; padding: 14px 16px 28px; touch-action: pan-y; }
+  .sheet-in { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: none; padding: 14px 16px 28px; touch-action: pan-y; }
+  /* Alto sempre uguale, qualsiasi serie si apra: passando da una all'altra non salta, e le serie più ricche
+     scorrono un poco dentro. Entra ed esce dal basso; .off è la posizione fuori schermo. */
+  :root { --sheet-ms: 220ms; }
+  .sheet { transition: transform var(--sheet-ms) ease; }
+  .sheet.off { transform: translateY(100%); }
+  .sheet-back.off { opacity: 0; }
   .sheet-back[hidden], .sheet[hidden] { display: none; }
   .sheet:focus, .sheet-in:focus { outline: none; }
   .sheet h2 { font-size: 1.15rem; margin: 0 32px 2px 0; line-height: 1.25; }
@@ -733,12 +739,29 @@
     $("sheetIn").scrollTop = 0;
     virtualizer.scrollToIndex(i, { align: "auto" }); // chiudendo, sotto c'è la riga dell'ultima serie vista
   }
+  const SHEET_MS = 220; // come --sheet-ms nel CSS
+  let closing = 0;
   const openSheet = (i) => {
-    $("sheet").hidden = $("sheetBack").hidden = false;
-    fillSheet(i);
-    $("sheetIn").focus(); // il fuoco su ciò che scorre, non sulla ✕: Esc e i tasti di scorrimento funzionano senza il bordo del fuoco sul tasto
+    clearTimeout(closing);
+    const sheet = $("sheet"), back = $("sheetBack");
+    sheet.style.transform = back.style.opacity = ""; // eventuali resti di un trascinamento
+    sheet.classList.add("off"); back.classList.add("off");
+    sheet.hidden = back.hidden = false;
+    fillSheet(i); // a pannello visibile, anche se fuori schermo: il grafico misura le colonne
+    sheet.offsetWidth; // la posizione fuori schermo va applicata prima di toglierla, o non ci sarebbe la salita
+    sheet.classList.remove("off"); back.classList.remove("off");
+    $("sheetIn").focus({ preventScroll: true }); // il fuoco su ciò che scorre, non sulla ✕: Esc e i tasti di scorrimento funzionano senza il bordo del fuoco sul tasto
   };
-  const closeSheet = () => { sheetDs = null; sheetI = -1; $("sheet").hidden = $("sheetBack").hidden = true; };
+  /** Scende fuori schermo, anche da dove l'ha lasciato un trascinamento, e poi si nasconde. */
+  const closeSheet = () => {
+    if (sheetI < 0) return;
+    sheetDs = null; sheetI = -1;
+    const sheet = $("sheet"), back = $("sheetBack");
+    sheet.style.transition = back.style.transition = "";
+    sheet.style.transform = back.style.opacity = "";
+    sheet.classList.add("off"); back.classList.add("off");
+    closing = setTimeout(() => (sheet.hidden = back.hidden = true), SHEET_MS);
+  };
   addEventListener("resize", () => sheetDs && drawDist(sheetDs));
   $("rows").addEventListener("click", (e) => {
     if (e.target.closest("a")) return; // il titolo resta il link alla serie
@@ -770,34 +793,49 @@
       setTimeout(() => (sliding = false), SWIPE_MS);
     }, SWIPE_MS);
   }
+  /* Il dito decide una volta sola, al primo movimento netto: di lato passa alla serie vicina; in giù, col contenuto
+     già in cima, trascina giù il pannello, che lasciato oltre la soglia si chiude; altrimenti si scorre e basta. */
   let touch = null;
-  $("sheetIn").addEventListener("touchstart", (e) => {
+  $("sheet").addEventListener("touchstart", (e) => {
     touch = null;
-    if (e.touches.length !== 1 || sliding) return;
-    // dentro qualcosa che scorre di lato (la matrice dei paesi) lo spostamento è suo, non uno swipe
+    if (e.touches.length !== 1 || sliding || sheetI < 0) return;
+    // dentro qualcosa che scorre di lato (la matrice dei paesi) lo spostamento di lato è suo, non uno swipe
+    let wide = false;
     for (let n = e.target; n && n !== e.currentTarget; n = n.parentElement)
-      if (n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).overflowX !== "visible") return;
-    touch = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, side: null };
+      if (n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).overflowX !== "visible") wide = true;
+    touch = { x: e.touches[0].clientX, y: e.touches[0].clientY, d: 0, mode: null, wide, top: $("sheetIn").scrollTop <= 0 };
   }, { passive: true });
-  $("sheetIn").addEventListener("touchmove", (e) => {
+  $("sheet").addEventListener("touchmove", (e) => {
     if (!touch) return;
     const dx = e.touches[0].clientX - touch.x, dy = e.touches[0].clientY - touch.y;
-    // si decide una volta sola, al primo movimento netto: di lato è uno swipe, in verticale si scorre e basta
-    if (touch.side === null && Math.hypot(dx, dy) > 10) touch.side = Math.abs(dx) > 1.5 * Math.abs(dy);
-    if (!touch.side) return;
-    const edge = (dx > 0 && sheetI === 0) || (dx < 0 && sheetI === visible.length - 1);
-    touch.dx = dx;
-    slide(e.currentTarget, `${edge ? dx / 4 : dx}px`, 0);
+    if (touch.mode === null && Math.hypot(dx, dy) > 10)
+      touch.mode = Math.abs(dx) > 1.5 * Math.abs(dy) ? (touch.wide ? "none" : "x") : dy > 0 && touch.top ? "down" : "none";
+    if (touch.mode === "x") {
+      const edge = (dx > 0 && sheetI === 0) || (dx < 0 && sheetI === visible.length - 1);
+      touch.d = dx;
+      slide($("sheetIn"), `${edge ? dx / 4 : dx}px`, 0);
+    } else if (touch.mode === "down") {
+      touch.d = Math.max(0, dy);
+      $("sheet").style.transition = $("sheetBack").style.transition = "none";
+      $("sheet").style.transform = `translateY(${touch.d}px)`;
+      $("sheetBack").style.opacity = String(1 - touch.d / $("sheet").offsetHeight);
+    }
   }, { passive: true });
-  const endTouch = (e) => {
-    if (!touch?.side) return (touch = null);
-    const dx = touch.dx;
+  const endTouch = () => {
+    const t = touch;
     touch = null;
-    if (Math.abs(dx) > Math.min(80, e.currentTarget.clientWidth / 4)) step(dx < 0 ? 1 : -1);
-    else slide(e.currentTarget, "", SWIPE_MS);
+    if (t?.mode === "x") {
+      if (Math.abs(t.d) > Math.min(80, $("sheetIn").clientWidth / 4)) step(t.d < 0 ? 1 : -1);
+      else slide($("sheetIn"), "", SWIPE_MS);
+    } else if (t?.mode === "down") {
+      if (t.d > Math.min(120, $("sheet").offsetHeight / 4)) return closeSheet();
+      const sheet = $("sheet"), back = $("sheetBack"); // torna su
+      sheet.style.transition = back.style.transition = "";
+      sheet.style.transform = back.style.opacity = "";
+    }
   };
-  $("sheetIn").addEventListener("touchend", endTouch);
-  $("sheetIn").addEventListener("touchcancel", endTouch);
+  $("sheet").addEventListener("touchend", endTouch);
+  $("sheet").addEventListener("touchcancel", endTouch);
   $("sheetBack").onclick = closeSheet;
   $("sheet").addEventListener("click", (e) => { if (e.target.closest(".close")) closeSheet(); });
   document.addEventListener("keydown", (e) => {
