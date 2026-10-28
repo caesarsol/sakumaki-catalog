@@ -673,8 +673,8 @@
   }
   /**
    * Le distribuzioni di tutte le fonti nello stesso grafico, come aree: ogni punto al centro della colonna della sua
-   * stella, misurata sulla tabella, e la curva che scende a zero ai bordi esterni di 1★ e 5★, così un picco in
-   * cima o in fondo si legge come picco e non come un'area tagliata. La griglia va da un bordo all'altro della
+   * stella, misurata sulla tabella, e la curva che scende a zero una colonna intera prima di 1★ e dopo 5★, così un
+   * picco in cima o in fondo si legge come picco e non come un'area tagliata: a mezza colonna la discesa era un dirupo. La griglia va da un bordo all'altro della
    * tabella, con le quote sopra le linee, a sinistra, dove le aree non arrivano.
    */
   function drawDist(ds) {
@@ -685,7 +685,7 @@
     const W = cell.clientWidth, H = 120, T = 14, B = 6;
     const top = Math.min(100, Math.ceil(Math.max(...ds.flatMap((d) => d.pct)) / 10) * 10);
     const x = (i) => cols[i].left - left + cols[i].width / 2, y = (v) => T + (1 - v / top) * (H - T - B);
-    const x0 = cols[0].left - left, x1 = cols[4].right - left;
+    const x0 = x(0) - cols[0].width, x1 = x(4) + cols[4].width;
     const grid = [0, top / 2, top].map((v) => `<line class="grid" x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="0" y="${y(v) - 3}">${v}%</text>`).join("");
     const curves = ds.map((d) => ({ d, pts: d.pct.map((v, i) => [x(i), y(v)]) }))
       .map(({ d, pts }) => ({ d, pts, path: smooth([[x0, y(0)], ...pts, [x1, y(0)]]) }));

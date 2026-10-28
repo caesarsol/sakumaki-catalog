@@ -79,7 +79,7 @@ non valido e il run fallisce senza job.
   ƒ, subito dopo il titolo, c'è solo quando una formula ordina.
 - Il dettaglio di una serie (distribuzioni dei voti di tutte le fonti su 5 fasce in un solo grafico, matrice stagioni × paesi, voci AniList/MAL) è un
   pannello che si apre dal basso toccando la riga (il titolo no: è il link alla serie).
-  Il grafico (un'area per fonte, che scende a zero ai bordi esterni di 1★ e 5★) è la prima riga della tabella
+  Il grafico (un'area per fonte, che scende a zero una colonna prima di 1★ e una dopo 5★) è la prima riga della tabella
   delle distribuzioni, largo quanto la tabella e disegnato in pixel sulle colonne misurate, così ogni punto sta
   sopra il suo numero. Non una riga che si allarga perché con la virtualizzazione le
   righe devono restare alte uguali, e sul telefono una matrice dentro una riga non si leggerebbe.
