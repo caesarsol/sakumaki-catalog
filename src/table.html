@@ -146,11 +146,11 @@
   .sheet .sub { color: var(--muted); font-size: .8rem; }
   .sheet .close { position: absolute; top: 6px; right: 8px; z-index: 1; font: inherit; font-size: 1.3rem; border: 0; border-radius: 6px; background: var(--panel); color: var(--muted); cursor: pointer; padding: 4px 8px; }
   .sheet h3 { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 6px; }
-  /* Distribuzioni a confronto: tutte su 5 fasce, una linea per fonte nel colore della fonte. Il grafico è la prima
-     riga della tabella, nelle cinque colonne delle stelle: ogni punto sta sopra il suo numero, e l'intestazione
-     delle stelle fa da asse. Si disegna in pixel veri sulla larghezza della cella (drawDist), non scalato con un
-     viewBox: scalato, sul desktop testo e punti diventavano enormi. La tabella porta i numeri esatti, anche per
-     chi non distingue i colori. */
+  /* Distribuzioni a confronto: tutte su 5 fasce, un'area per fonte nel colore della fonte. Il grafico è la prima
+     riga della tabella e ne prende tutta la larghezza; ogni punto sta sopra il numero della sua stella, e
+     l'intestazione delle stelle fa da asse. Si disegna in pixel veri sulle colonne misurate (drawDist), non scalato
+     con un viewBox: scalato, sul desktop testo e punti diventavano enormi. La tabella porta i numeri esatti, anche
+     per chi non distingue i colori. */
   .dist-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums; margin-top: 6px; }
   .dist-table col.lab { width: 5.2rem; }
   .dist-table col.mean { width: 3.6rem; }
@@ -165,7 +165,8 @@
   .dist-chart { display: block; overflow: visible; }
   .dist-chart text { font-size: 9px; fill: var(--muted); font-variant-numeric: tabular-nums; }
   .dist-chart .grid { stroke: var(--line); stroke-width: 1; }
-  .dist-chart path { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .dist-chart .area { stroke: none; fill-opacity: .16; }
+  .dist-chart .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
   .dist-chart circle { stroke: var(--panel); stroke-width: 1.5; }
   .matrix-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
   .sheet table.matrix { width: auto; border-collapse: collapse; font-size: .8rem; }
@@ -666,23 +667,33 @@
     if (!ds.length) return "";
     const stars = [1, 2, 3, 4, 5];
     return `<h3>Distribuzione dei voti, in % dei votanti</h3><table class="dist-table"><colgroup><col class="lab">${stars.map(() => "<col>").join("")}<col class="mean"></colgroup>` +
-      `<thead><tr class="chart"><td></td><td colspan="5" id="distPlot"></td><td></td></tr><tr><th></th>${stars.map((n) => `<th class="st">${n}★</th>`).join("")}<th>voto</th></tr></thead><tbody>` +
+      `<thead><tr class="chart"><td colspan="7" id="distPlot"></td></tr><tr><th></th>${stars.map((n) => `<th class="st">${n}★</th>`).join("")}<th>voto</th></tr></thead><tbody>` +
       ds.map((d) => `<tr><td><span class="key" style="background:${d.color}"></span>${d.label}</td>${d.pct.map((v, i) => `<td class="st">${v.toFixed(1)}<span class="pc">%</span><small>${d.n[i]}</small></td>`).join("")}<td>${d.mean > 0 ? d.mean.toFixed(2) : "—"}<small>${fmt.format(d.votes)}</small></td></tr>`).join("") +
       `</tbody></table>`;
   }
-  /** Le distribuzioni di tutte le fonti nello stesso grafico, ogni punto al centro della colonna della sua stella. Le quote dell'asse stanno a sinistra, sopra la colonna delle fonti. */
+  /**
+   * Le distribuzioni di tutte le fonti nello stesso grafico, come aree: ogni punto al centro della colonna della sua
+   * stella, misurata sulla tabella, e la curva che scende a zero ai bordi esterni di 1★ e 5★, così un picco in
+   * cima o in fondo si legge come picco e non come un'area tagliata. La griglia va da un bordo all'altro della
+   * tabella, con le quote sopra le linee, a sinistra, dove le aree non arrivano.
+   */
   function drawDist(ds) {
     const cell = $("distPlot");
     if (!cell) return;
-    const W = cell.clientWidth, H = 110, T = 8, B = 8;
+    const left = cell.getBoundingClientRect().left;
+    const cols = [...cell.closest("table").querySelectorAll("th.st")].map((th) => th.getBoundingClientRect());
+    const W = cell.clientWidth, H = 120, T = 14, B = 6;
     const top = Math.min(100, Math.ceil(Math.max(...ds.flatMap((d) => d.pct)) / 10) * 10);
-    const x = (i) => ((i + 0.5) * W) / 5, y = (v) => T + (1 - v / top) * (H - T - B);
-    const grid = [0, top / 2, top].map((v) => `<line class="grid" x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="-6" y="${y(v) + 3}" text-anchor="end">${v}%</text>`).join("");
-    const lines = ds.map((d) => {
-      const pts = d.pct.map((v, i) => [x(i), y(v)]);
-      return `<path d="${smooth(pts)}" style="stroke:${d.color}"/>` + pts.map(([px, py], i) => `<circle cx="${px}" cy="${py}" r="3.5" style="fill:${d.color}"><title>${d.label}, ${i + 1}★: ${d.pct[i].toFixed(1)}%</title></circle>`).join("");
-    }).join("");
-    cell.innerHTML = `<svg class="dist-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="distribuzione dei voti per fonte">${grid}${lines}</svg>`;
+    const x = (i) => cols[i].left - left + cols[i].width / 2, y = (v) => T + (1 - v / top) * (H - T - B);
+    const x0 = cols[0].left - left, x1 = cols[4].right - left;
+    const grid = [0, top / 2, top].map((v) => `<line class="grid" x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="0" y="${y(v) - 3}">${v}%</text>`).join("");
+    const curves = ds.map((d) => ({ d, pts: d.pct.map((v, i) => [x(i), y(v)]) }))
+      .map(({ d, pts }) => ({ d, pts, path: smooth([[x0, y(0)], ...pts, [x1, y(0)]]) }));
+    // prima tutte le aree, poi linee e punti: un'area non deve coprire la linea di un'altra fonte
+    const areas = curves.map(({ d, path }) => `<path class="area" d="${path} Z" style="fill:${d.color}"/>`).join("");
+    const lines = curves.map(({ d, pts, path }) =>
+      `<path class="line" d="${path}" style="stroke:${d.color}"/>` + pts.map(([px, py], i) => `<circle cx="${px}" cy="${py}" r="3" style="fill:${d.color}"><title>${d.label}, ${i + 1}★: ${d.pct[i].toFixed(1)}%</title></circle>`).join("")).join("");
+    cell.innerHTML = `<svg class="dist-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="distribuzione dei voti per fonte">${grid}${areas}${lines}</svg>`;
   }
   function sheetHtml(r, ds) {
     let matrix = `<p class="sub">Le puntate per paese arrivano col prossimo catalogo.</p>`;
