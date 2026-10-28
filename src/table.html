@@ -152,8 +152,11 @@
      con un viewBox: scalato, sul desktop testo e punti diventavano enormi. La tabella porta i numeri esatti, anche
      per chi non distingue i colori. */
   .dist-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums; margin-top: 6px; }
-  .dist-table col.lab { width: 5.2rem; }
-  .dist-table col.mean { width: 3.6rem; }
+  /* Sul desktop le fasce hanno una larghezza fissa e stanno al centro: a tutta larghezza le curve si stiravano
+     piatte. Le due colonne ai lati, fonti e voto, sono larghe uguali; il voto sta in fondo alla sua, e nello spazio
+     prima scende a zero l'area dopo 5★, che così non gli passa sopra. */
+  .dist-table col.lab, .dist-table col.mean { width: auto; }
+  .dist-table col.st { width: 4.5rem; }
   .sheet .dist-table th, .sheet .dist-table td { height: auto; position: static; padding: 2px 4px; cursor: default; background: none; box-shadow: none; border-bottom: 1px solid var(--line); text-align: right; font-weight: normal; line-height: 1.2; }
   .sheet .dist-table th { color: var(--muted); }
   .sheet .dist-table td:first-child, .sheet .dist-table th:first-child { text-align: left; white-space: normal; }
@@ -167,7 +170,6 @@
   .dist-chart .grid { stroke: var(--line); stroke-width: 1; }
   .dist-chart .area { stroke: none; fill-opacity: .16; }
   .dist-chart .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-  .dist-chart circle { stroke: var(--panel); stroke-width: 1.5; }
   .matrix-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
   .sheet table.matrix { width: auto; border-collapse: collapse; font-size: .8rem; }
   .sheet .matrix th, .sheet .matrix td { height: auto; position: static; padding: 3px 5px; cursor: default; background: none; box-shadow: none; border-bottom: 1px solid var(--line); text-align: right; font-weight: normal; }
@@ -253,6 +255,8 @@
     .seg span { width: 100%; justify-content: center; }
     .tab { padding: 6px 7px; }
     .dist-table col.lab { width: 4.6rem; }
+    .dist-table col.st { width: auto; } /* sul telefono le fasce si dividono lo spazio, e il voto si tiene mezza fascia d'aria */
+    .dist-table col.mean { width: 4.5rem; }
     .sheet .dist-table .st { padding: 2px 1px; }
     .tab .long { display: none; } /* sul telefono la scheda delle formule è solo ƒ: con la parola intera le schede non stanno su una riga */
     #count { font-size: .78rem; }
@@ -662,13 +666,15 @@
     for (let i = 0; i < n - 1; i++) d += ` C${pts[i][0] + dx[i] / 3},${pts[i][1] + (t[i] * dx[i]) / 3} ${pts[i + 1][0] - dx[i] / 3},${pts[i + 1][1] - (t[i + 1] * dx[i]) / 3} ${pts[i + 1][0]},${pts[i + 1][1]}`;
     return d;
   }
+  /** Due cifre significative: il decimale solo sotto il 10%, dove conta. */
+  const pctLabel = (v) => (v >= 9.95 ? String(Math.round(v)) : v ? v.toFixed(1) : "0");
   /** La tabella delle distribuzioni, con la prima riga vuota per il grafico: lo disegna drawDist quando il pannello è aperto e la cella ha una larghezza. */
   function distSection(ds) {
     if (!ds.length) return "";
     const stars = [1, 2, 3, 4, 5];
-    return `<h3>Distribuzione dei voti, in % dei votanti</h3><table class="dist-table"><colgroup><col class="lab">${stars.map(() => "<col>").join("")}<col class="mean"></colgroup>` +
-      `<thead><tr class="chart"><td colspan="7" id="distPlot"></td></tr><tr><th></th>${stars.map((n) => `<th class="st">${n}★</th>`).join("")}<th>voto</th></tr></thead><tbody>` +
-      ds.map((d) => `<tr><td><span class="key" style="background:${d.color}"></span>${d.label}</td>${d.pct.map((v, i) => `<td class="st">${v.toFixed(1)}<span class="pc">%</span><small>${d.n[i]}</small></td>`).join("")}<td>${d.mean > 0 ? d.mean.toFixed(2) : "—"}<small>${fmt.format(d.votes)}</small></td></tr>`).join("") +
+    return `<h3>Distribuzione dei voti, in % dei votanti</h3><table class="dist-table"><colgroup><col class="lab">${stars.map(() => `<col class="st">`).join("")}<col class="mean"></colgroup>` +
+      `<thead><tr class="chart"><td colspan="7" id="distPlot"></td></tr><tr><th></th>${stars.map((n) => `<th class="st">${n}★</th>`).join("")}<th class="mean">voto</th></tr></thead><tbody>` +
+      ds.map((d) => `<tr><td><span class="key" style="background:${d.color}"></span>${d.label}</td>${d.pct.map((v, i) => `<td class="st">${pctLabel(v)}<span class="pc">%</span><small>${d.n[i]}</small></td>`).join("")}<td>${d.mean > 0 ? d.mean.toFixed(2) : "—"}<small>${fmt.format(d.votes)}</small></td></tr>`).join("") +
       `</tbody></table>`;
   }
   /**
@@ -685,14 +691,16 @@
     const W = cell.clientWidth, H = 120, T = 14, B = 6;
     const top = 100; // scala fissa: due serie si confrontano a colpo d'occhio, e un picco basso non sembra alto
     const x = (i) => cols[i].left - left + cols[i].width / 2, y = (v) => T + (1 - v / top) * (H - T - B);
-    const x0 = x(0) - cols[0].width, x1 = x(4) + cols[4].width;
+    // la discesa dopo 5★ si ferma comunque prima dei numeri del voto, che stanno in fondo alla loro colonna (3,6rem bastano a "10.00" e ai votanti)
+    const mean = cell.closest("table").querySelector("th.mean").getBoundingClientRect().right - left - 3.6 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const x0 = Math.max(0, x(0) - cols[0].width), x1 = Math.min(mean, x(4) + cols[4].width);
     const grid = [0, top / 2, top].map((v) => `<line class="grid" x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="0" y="${y(v) - 3}">${v}%</text>`).join("");
     const curves = ds.map((d) => ({ d, pts: d.pct.map((v, i) => [x(i), y(v)]) }))
       .map(({ d, pts }) => ({ d, pts, path: smooth([[x0, y(0)], ...pts, [x1, y(0)]]) }));
     // prima tutte le aree, poi linee e punti: un'area non deve coprire la linea di un'altra fonte
     const areas = curves.map(({ d, path }) => `<path class="area" d="${path} Z" style="fill:${d.color}"/>`).join("");
     const lines = curves.map(({ d, pts, path }) =>
-      `<path class="line" d="${path}" style="stroke:${d.color}"/>` + pts.map(([px, py], i) => `<circle cx="${px}" cy="${py}" r="3" style="fill:${d.color}"><title>${d.label}, ${i + 1}★: ${d.pct[i].toFixed(1)}%</title></circle>`).join("")).join("");
+      `<path class="line" d="${path}" style="stroke:${d.color}"/>` + pts.map(([px, py], i) => `<circle cx="${px}" cy="${py}" r="3" style="fill:${d.color}"><title>${d.label}, ${i + 1}★: ${pctLabel(d.pct[i])}%</title></circle>`).join("")).join("");
     cell.innerHTML = `<svg class="dist-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="distribuzione dei voti per fonte">${grid}${areas}${lines}</svg>`;
   }
   function sheetHtml(r, ds) {
