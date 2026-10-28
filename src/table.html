@@ -137,9 +137,11 @@
   .sheet-back { position: fixed; inset: 0; background: #0006; z-index: 30; }
   /* Il pannello non scorre: scorre il suo contenuto (.sheet-in), così la ✕ resta ferma nell'angolo. Sul desktop
      è largo quanto basta a leggerlo, centrato: a tutta larghezza grafico e tabella si allargherebbero a vuoto. */
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 46rem; margin: 0 auto; max-height: 82vh; display: flex; flex-direction: column; z-index: 31; box-sizing: border-box;
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 46rem; margin: 0 auto; max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; z-index: 31; box-sizing: border-box;
     background: var(--panel); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px #0003; font-size: .9rem; }
-  .sheet-in { overflow: auto; padding: 14px 16px 28px; }
+  /* pan-y: lo scorrimento in verticale resta al browser, quello di lato è lo swipe fra le serie (sheetSwipe).
+     La matrice dei paesi, che scorre di lato per conto suo, è un contenitore di scorrimento e non ne risente. */
+  .sheet-in { overflow: auto; padding: 14px 16px 28px; touch-action: pan-y; }
   .sheet-back[hidden], .sheet[hidden] { display: none; }
   .sheet:focus, .sheet-in:focus { outline: none; }
   .sheet h2 { font-size: 1.15rem; margin: 0 32px 2px 0; line-height: 1.25; }
@@ -722,24 +724,86 @@
       <h3>AniList e MyAnimeList, voce per voce</h3>${entries}`;
   }
   let sheetDs = null; // le distribuzioni della serie aperta, per ridisegnare il grafico quando la finestra cambia larghezza
-  const openSheet = (r) => {
-    sheetDs = distributions(r);
-    $("sheetIn").innerHTML = sheetHtml(r, sheetDs);
-    $("sheet").hidden = $("sheetBack").hidden = false;
+  let sheetI = -1; // la posizione della serie aperta fra le righe visibili: lo swipe e le frecce passano alle vicine, nell'ordine della tabella
+  function fillSheet(i) {
+    sheetI = i;
+    sheetDs = distributions(visible[i]);
+    $("sheetIn").innerHTML = sheetHtml(visible[i], sheetDs);
     drawDist(sheetDs);
     $("sheetIn").scrollTop = 0;
+    virtualizer.scrollToIndex(i, { align: "auto" }); // chiudendo, sotto c'è la riga dell'ultima serie vista
+  }
+  const openSheet = (i) => {
+    $("sheet").hidden = $("sheetBack").hidden = false;
+    fillSheet(i);
     $("sheetIn").focus(); // il fuoco su ciò che scorre, non sulla ✕: Esc e i tasti di scorrimento funzionano senza il bordo del fuoco sul tasto
   };
-  const closeSheet = () => { sheetDs = null; $("sheet").hidden = $("sheetBack").hidden = true; };
+  const closeSheet = () => { sheetDs = null; sheetI = -1; $("sheet").hidden = $("sheetBack").hidden = true; };
   addEventListener("resize", () => sheetDs && drawDist(sheetDs));
   $("rows").addEventListener("click", (e) => {
     if (e.target.closest("a")) return; // il titolo resta il link alla serie
     const tr = e.target.closest("tr[data-i]");
-    if (tr) openSheet(visible[Number(tr.dataset.i)]);
+    if (tr) openSheet(Number(tr.dataset.i));
   });
+  /* ---- swipe fra le serie: il contenuto segue il dito; lasciato oltre la soglia esce da quel lato ed entra la
+     serie vicina dall'altro, altrimenti torna al suo posto. In cima e in fondo all'elenco cede appena e torna. */
+  const SWIPE_MS = 160;
+  let sliding = false;
+  const slide = (el, x, ms, ease = "ease-out") => {
+    el.style.transition = ms ? `transform ${ms}ms ${ease}, opacity ${ms}ms` : "none";
+    el.style.transform = x ? `translateX(${x})` : "";
+  };
+  /** Passa alla serie seguente (dir 1) o precedente (-1). */
+  function step(dir) {
+    const el = $("sheetIn"), i = sheetI + dir;
+    if (sliding) return;
+    if (i < 0 || i >= visible.length) return slide(el, "", SWIPE_MS);
+    sliding = true;
+    slide(el, `${-dir * 100}%`, SWIPE_MS, "ease-in");
+    el.style.opacity = "0";
+    setTimeout(() => {
+      fillSheet(i);
+      slide(el, `${dir * 40}%`, 0);
+      el.offsetWidth; // la posizione di partenza va applicata prima della transizione, o la nuova serie apparirebbe al suo posto
+      slide(el, "", SWIPE_MS);
+      el.style.opacity = "";
+      setTimeout(() => (sliding = false), SWIPE_MS);
+    }, SWIPE_MS);
+  }
+  let touch = null;
+  $("sheetIn").addEventListener("touchstart", (e) => {
+    touch = null;
+    if (e.touches.length !== 1 || sliding) return;
+    // dentro qualcosa che scorre di lato (la matrice dei paesi) lo spostamento è suo, non uno swipe
+    for (let n = e.target; n && n !== e.currentTarget; n = n.parentElement)
+      if (n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).overflowX !== "visible") return;
+    touch = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, side: null };
+  }, { passive: true });
+  $("sheetIn").addEventListener("touchmove", (e) => {
+    if (!touch) return;
+    const dx = e.touches[0].clientX - touch.x, dy = e.touches[0].clientY - touch.y;
+    // si decide una volta sola, al primo movimento netto: di lato è uno swipe, in verticale si scorre e basta
+    if (touch.side === null && Math.hypot(dx, dy) > 10) touch.side = Math.abs(dx) > 1.5 * Math.abs(dy);
+    if (!touch.side) return;
+    const edge = (dx > 0 && sheetI === 0) || (dx < 0 && sheetI === visible.length - 1);
+    touch.dx = dx;
+    slide(e.currentTarget, `${edge ? dx / 4 : dx}px`, 0);
+  }, { passive: true });
+  const endTouch = (e) => {
+    if (!touch?.side) return (touch = null);
+    const dx = touch.dx;
+    touch = null;
+    if (Math.abs(dx) > Math.min(80, e.currentTarget.clientWidth / 4)) step(dx < 0 ? 1 : -1);
+    else slide(e.currentTarget, "", SWIPE_MS);
+  };
+  $("sheetIn").addEventListener("touchend", endTouch);
+  $("sheetIn").addEventListener("touchcancel", endTouch);
   $("sheetBack").onclick = closeSheet;
   $("sheet").addEventListener("click", (e) => { if (e.target.closest(".close")) closeSheet(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSheet();
+    if (sheetI >= 0 && (e.key === "ArrowRight" || e.key === "ArrowLeft")) { e.preventDefault(); step(e.key === "ArrowRight" ? 1 : -1); } // sul desktop, al posto dello swipe
+  });
   const schede = { Filtri: [$("tabFiltri"), $("paneFiltri")], Ordine: [$("tabOrdine"), $("paneOrdine")], Fx: [$("tabFx"), $("paneFx")], Voti: [$("tabVoti"), $("paneVoti")] };
   for (const [nome, [tab]] of Object.entries(schede)) tab.onclick = () => {
     for (const [altro, [t, pannello]] of Object.entries(schede)) {
