@@ -683,7 +683,7 @@
     const left = cell.getBoundingClientRect().left;
     const cols = [...cell.closest("table").querySelectorAll("th.st")].map((th) => th.getBoundingClientRect());
     const W = cell.clientWidth, H = 120, T = 14, B = 6;
-    const top = Math.min(100, Math.ceil(Math.max(...ds.flatMap((d) => d.pct)) / 10) * 10);
+    const top = 100; // scala fissa: due serie si confrontano a colpo d'occhio, e un picco basso non sembra alto
     const x = (i) => cols[i].left - left + cols[i].width / 2, y = (v) => T + (1 - v / top) * (H - T - B);
     const x0 = x(0) - cols[0].width, x1 = x(4) + cols[4].width;
     const grid = [0, top / 2, top].map((v) => `<line class="grid" x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="0" y="${y(v) - 3}">${v}%</text>`).join("");
