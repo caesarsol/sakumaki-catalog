@@ -148,6 +148,10 @@
   .sheet { transition: transform var(--sheet-ms) ease; }
   .sheet.off { transform: translateY(100%); }
   .sheet-back.off { opacity: 0; }
+  /* A pannello aperto la pagina sotto non si muove: un trascinamento che il pannello non usa (una serie che non
+     scorre, lo sfondo, la ✕) passerebbe alla pagina, e in cima Chrome su Android la ricaricherebbe (pull-to-refresh). */
+  html.sheet-open, html.sheet-open body { overflow: hidden; overscroll-behavior: none; }
+  .sheet-back, .sheet { touch-action: none; }
   .sheet-back[hidden], .sheet[hidden] { display: none; }
   .sheet:focus, .sheet-in:focus { outline: none; }
   .sheet h2 { font-size: 1.15rem; margin: 0 32px 2px 0; line-height: 1.25; }
@@ -747,6 +751,7 @@
     sheet.style.transform = back.style.opacity = ""; // eventuali resti di un trascinamento
     sheet.classList.add("off"); back.classList.add("off");
     sheet.hidden = back.hidden = false;
+    document.documentElement.classList.add("sheet-open");
     fillSheet(i); // a pannello visibile, anche se fuori schermo: il grafico misura le colonne
     sheet.offsetWidth; // la posizione fuori schermo va applicata prima di toglierla, o non ci sarebbe la salita
     sheet.classList.remove("off"); back.classList.remove("off");
@@ -760,6 +765,7 @@
     sheet.style.transition = back.style.transition = "";
     sheet.style.transform = back.style.opacity = "";
     sheet.classList.add("off"); back.classList.add("off");
+    document.documentElement.classList.remove("sheet-open");
     closing = setTimeout(() => (sheet.hidden = back.hidden = true), SHEET_MS);
   };
   addEventListener("resize", () => sheetDs && drawDist(sheetDs));
@@ -808,6 +814,10 @@
   $("sheet").addEventListener("touchmove", (e) => {
     if (!touch) return;
     const dx = e.touches[0].clientX - touch.x, dy = e.touches[0].clientY - touch.y;
+    // In giù col contenuto in cima il gesto è nostro fin dal primo pixel: lasciato al browser, anche prima che il
+    // modo sia deciso, scorrerebbe la pagina sotto o la ricaricherebbe.
+    const down = touch.mode === "down" || (touch.mode === null && touch.top && dy > 0 && Math.abs(dy) >= Math.abs(dx));
+    if (down && e.cancelable) e.preventDefault();
     if (touch.mode === null && Math.hypot(dx, dy) > 10)
       touch.mode = Math.abs(dx) > 1.5 * Math.abs(dy) ? (touch.wide ? "none" : "x") : dy > 0 && touch.top ? "down" : "none";
     if (touch.mode === "x") {
@@ -820,7 +830,7 @@
       $("sheet").style.transform = `translateY(${touch.d}px)`;
       $("sheetBack").style.opacity = String(1 - touch.d / $("sheet").offsetHeight);
     }
-  }, { passive: true });
+  }, { passive: false }); // non passivo: deve poter fermare il browser (preventDefault) nel trascinamento in giù
   const endTouch = () => {
     const t = touch;
     touch = null;
